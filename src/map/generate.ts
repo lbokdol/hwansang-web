@@ -24,6 +24,8 @@ export interface GenerateParams {
   weaponDrops?: boolean;
   /** 윤회겁 배율 — 적·보스 스탯에 stageScale과 함께 곱(기본 1). */
   cycleMul?: number;
+  /** 六道 지옥도(嗔) 표식 = 해저드 밀도 배수(기본 1). */
+  markDensityMul?: number;
 }
 
 export interface GeneratedFloor {
@@ -111,6 +113,15 @@ function carve(p: GenerateParams, width: number, height: number): Carved {
 
   // Hell hazards, then keep the spawn safe.
   p.hell.paintHazards(level, { level, rng: p.rng, depth: p.depth });
+  // 六道 지옥도(嗔) 표식: 그 지옥의 주 해저드를 추가 산포해 더 짙게 만든다.
+  const mul = p.markDensityMul ?? 1;
+  if (mul > 1 && p.hell.tiles.length > 0) {
+    const hz = p.hell.tiles[0].id;
+    const extra = [...level.floorCells()];
+    p.rng.shuffle(extra);
+    const n = Math.floor(extra.length * 0.04 * (mul - 1));
+    for (let i = 0; i < n; i++) level.setTile(extra[i], hz);
+  }
   level.setTile(start, T_FLOOR);
 
   let bossPos: Pos | null = null;

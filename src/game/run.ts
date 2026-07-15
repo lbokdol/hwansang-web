@@ -32,9 +32,30 @@ import { cycleOf, cycleScale } from "../content/curses";
 import { MessageLog } from "../ui/log";
 import { sfx } from "../audio/sfx";
 import { bestiaryJeonggiBonus, bestiaryStars, recordKill } from "../meta/bestiary";
+import {
+  chi,
+  emptyConduct,
+  evaluateVerdict,
+  jin,
+  tam,
+  type Conduct,
+  type VerdictDef,
+} from "../content/judgment";
 import type { RunOutcome } from "../meta/karma";
 
 const FOV_RADIUS = 8;
+
+/** 六道(육도) 표식 — 직전 깊은 court 판결이 새겨 다음 지옥에 적용된다. */
+export type RealmMark = "none" | "in" | "cheon" | "jiok" | "agwi" | "chuksaeng";
+
+const REALM_LABEL: Record<RealmMark, string> = {
+  none: "",
+  in: "인도(人) — 호신",
+  cheon: "천도(天) — 큰 호신",
+  jiok: "지옥도(瞋) — 해저드가 짙다",
+  agwi: "아귀도(貪) — 회복 반감",
+  chuksaeng: "축생도(癡) — 시야가 흐리다",
+};
 
 export type PlayerAction =
   | { kind: "move"; dir: Pos }
@@ -59,6 +80,22 @@ export class Run implements GameContext {
   hellOrder: number[] = [];
   /** 윤회겁(輪廻劫) 단계 — 활성 악연 weight 합. GameContext.cycle. */
   cycle = 0;
+
+  // ---- 업경대 심판(業鏡臺) + 六道 -------------------------------------------
+  /** 이번 지옥에서의 태도(왕이 저울질할 三毒). 지옥 진입마다 리셋. */
+  private conduct: Conduct = emptyConduct();
+  private cumJin = 0;
+  private cumTam = 0;
+  private cumChi = 0;
+  private clarityStreak = 0;
+  /** 이번 지옥에 작용 중인 표식(직전 깊은 court가 새긴 것). */
+  activeMark: RealmMark = "none";
+  private pendingMark: RealmMark = "none";
+  /** 六道 전륜 집계(통과한 깊은 court별 표식). */
+  markTally: Record<string, number> = {};
+  private judgedHellIndex = -1;
+  /** 표현층이 렌더할 최근 판결(court당 1회). */
+  lastVerdict: VerdictDef | null = null;
 
   enemiesKilled = 0;
   bossesKilled = 0;
@@ -109,9 +146,14 @@ export class Run implements GameContext {
     return hellByIndex(this.hellOrder[this.hellIndex] ?? this.hellIndex);
   }
 
-  /** Absolute descent stage (0..11): difficulty scales with this, not the hell. */
+  /** Absolute descent stage (0..29): difficulty scales with this, not the hell. */
   get stage(): number {
     return this.hellIndex * 3 + this.floorIndex;
+  }
+
+  /** 축생도(癡) 표식 = 판단 흐림 → 시야 8→5. 그 외 8. */
+  private get fovRadius(): number {
+    return this.activeMark === "chuksaeng" ? 5 : FOV_RADIUS;
   }
 
   private grantStartingTalismans(): void {
@@ -134,6 +176,13 @@ export class Run implements GameContext {
 
   private buildFloor(first = false): void {
     const hell = this.hell;
+    if (this.floorIndex === 0) {
+      // 새 지옥: 왕이 저울질할 태도(Conduct)를 리셋 + 직전 깊은 court가 새긴 六道 표식을 적용(소비).
+      this.conduct = emptyConduct();
+      this.activeMark = this.pendingMark;
+      this.pendingMark = "none";
+      this.applyRealmEntryBoon();
+    }
     this.discover("hells", hell.id);
     const { level, start } = generateFloor({
       hell,
@@ -143,6 +192,7 @@ export class Run implements GameContext {
       dropPool: this.dropPool,
       weaponDrops: this.loadout.weaponDrops,
       cycleMul: cycleScale(this.cycle),
+      markDensityMul: this.activeMark === "jiok" ? 1.5 : 1, // 지옥도(嗔) = 해저드 더 짙게
     });
     this.level = level;
     this.player.pos = { ...start };
@@ -154,7 +204,9 @@ export class Run implements GameContext {
     for (const e of level.livingEnemies()) this.scheduler.add(e, true);
     if (level.isBossFloor) sfx.bossAppear();
 
-    if (this.loadout.revealHazards) {
+    // 축생도(癡) 표식 = 판단 흐림 → 로드아웃의 사전 정찰 이점을 무효화.
+    const revealBlocked = this.activeMark === "chuksaeng";
+    if (this.loadout.revealHazards && !revealBlocked) {
       // 망자의 직감 R1: mark every hazard/stair tile as explored from the start.
       for (let y = 0; y < level.height; y++) {
         for (let x = 0; x < level.width; x++) {
@@ -163,12 +215,12 @@ export class Run implements GameContext {
         }
       }
     }
-    if (this.loadout.revealEnemies) {
+    if (this.loadout.revealEnemies && !revealBlocked) {
       // 망자의 직감 R2: reveal enemy positions at floor start.
       for (const e of level.livingEnemies()) level.explored.add(`${e.pos.x},${e.pos.y}`);
     }
 
-    computeFov(level, this.player.pos, FOV_RADIUS);
+    computeFov(level, this.player.pos, this.fovRadius);
 
     if (first || this.floorIndex === 0) this.messages.push(hell.intro, hell.palette.accent);
     this.messages.push(
@@ -177,6 +229,58 @@ export class Run implements GameContext {
     );
     if (this.loadout.startInvulnTurns > 0 && this.depthCount === 1) {
       this.messages.push(`윤회의 결의: ${this.loadout.startInvulnTurns}턴간 무적`, "#ffd86b");
+    }
+    if (this.floorIndex === 0 && this.activeMark !== "none") {
+      this.messages.push(`六道 표식: ${REALM_LABEL[this.activeMark]}`, "#b08cff");
+    }
+    // 보스층: 업경대 심판을 여기서 평가·적용 (헤드리스 포함 court당 1회).
+    this.judgeCourt();
+  }
+
+  // ---- 업경대 심판(業鏡臺) -------------------------------------------------
+
+  /** 보스층 도달 시 court당 1회: 태도(Conduct)를 저울질해 왕의 판결을 내리고 적용한다. */
+  private judgeCourt(): void {
+    if (!this.level.isBossFloor || this.judgedHellIndex === this.hellIndex) return;
+    this.judgedHellIndex = this.hellIndex;
+    const boss = this.level.livingEnemies().find((e) => e.isBoss);
+    if (!boss) return;
+    const c = this.conduct;
+    const v = evaluateVerdict(c);
+    this.lastVerdict = v;
+    this.recordJudgment(c, v);
+    v.apply(this, boss);
+    this.messages.push(`업경대 심판 — ${v.name}(${v.nameHanja}): ${v.flavor}`, v.isBoon ? "#ffe9a8" : "#ff8a5a");
+    this.fx.shake(6);
+  }
+
+  /** 판결 → 三毒 누적 + 다음 지옥에 새길 六道 표식(pending). */
+  private recordJudgment(c: Conduct, v: VerdictDef): void {
+    this.cumJin += jin(c);
+    this.cumTam += tam(c);
+    this.cumChi += chi(c);
+    if (v.id === "jeongsim") this.clarityStreak++;
+    else this.clarityStreak = 0;
+    this.pendingMark =
+      v.id === "jinno"
+        ? "jiok"
+        : v.id === "tamyok"
+          ? "agwi"
+          : v.id === "uchi"
+            ? "chuksaeng"
+            : v.id === "jeongsim"
+              ? this.clarityStreak >= 2
+                ? "cheon"
+                : "in"
+              : "none";
+  }
+
+  /** 六道 진입 보우: 인도(人)·천도(天) 표식은 지옥 진입 시 호신을 준다. */
+  private applyRealmEntryBoon(): void {
+    if (this.activeMark === "in") applyStatusRaw(this.player, "empower", 4, 1, undefined, 1);
+    else if (this.activeMark === "cheon") {
+      applyStatusRaw(this.player, "empower", 8, 2, undefined, 1);
+      this.heal(this.player, Math.ceil(this.player.stats.maxHp * 0.25));
     }
   }
 
@@ -259,7 +363,7 @@ export class Run implements GameContext {
     if (this.player.flashTurns > 0) this.player.flashTurns--;
     // Recompute FOV from the player's final position (covers move, ice-slide,
     // and teleport alike).
-    computeFov(this.level, this.player.pos, FOV_RADIUS);
+    computeFov(this.level, this.player.pos, this.fovRadius);
     // 보스 인접 접촉: ending a turn next to a boss takes its ATK (보스패턴 §1.2).
     this.applyBossAdjacency();
     this.endActorTurn(this.player);
@@ -372,6 +476,7 @@ export class Run implements GameContext {
       this.messages.push("연마 제단: 공격력 +1.", "#ffd86b");
     }
     sfx.pickup();
+    this.conduct.altarsTaken++; // 貪: 제단을 취함
     this.level.removeAltar(altar);
   }
 
@@ -383,6 +488,7 @@ export class Run implements GameContext {
       this.messages.push(`${t.name}(${t.nameHanja})을(를) 주웠다.`, t.color);
       this.discover("talismans", drop.talismanId);
       sfx.pickup();
+      this.conduct.pickups++; // 貪: 전리품을 그러쥠
       this.level.removeDrop(drop);
     } else {
       this.messages.push("인벤토리가 가득 찼다.", "#a08");
@@ -439,6 +545,9 @@ export class Run implements GameContext {
     if (result.consumed) {
       sfx.talisman(stack.id);
       this.talismansUsed++;
+      this.conduct.talismansUsed++;
+      // 癡: 축지·천리안 등 요행/술수에 매달림.
+      if (stack.id === "teleport_talisman" || stack.id === "farsight_talisman") this.conduct.escapes++;
       this.player.consumeTalisman(index);
       return true;
     }
@@ -530,7 +639,10 @@ export class Run implements GameContext {
     }
 
     target.stats.hp -= dmg;
-    if (target === this.player) this.damageTaken += dmg;
+    if (target === this.player) {
+      this.damageTaken += dmg;
+      this.conduct.damageTaken += dmg; // 업경대: 무피격(淸) 판정용 지옥별 피해
+    }
     target.flashTurns = 1;
 
     // 거울왕 반사장(염라대왕): reflect part of the player's direct hit. The
@@ -606,6 +718,8 @@ export class Run implements GameContext {
 
   heal(target: Actor, amount: number): void {
     if (!target.alive || amount <= 0) return;
+    // 아귀도(貪) 표식 = 굶주림: 망자의 모든 회복 반감(하한 1).
+    if (target === this.player && this.activeMark === "agwi") amount = Math.max(1, Math.ceil(amount * 0.5));
     const before = target.stats.hp;
     target.stats.hp = Math.min(target.stats.maxHp, target.stats.hp + amount);
     const gained = target.stats.hp - before;
@@ -738,8 +852,12 @@ export class Run implements GameContext {
 
   private killEnemy(enemy: Enemy, _source?: Actor): void {
     if (!enemy.alive) return;
+    // 嗔: 무력한 자(빙결·봉박·수면)를 벤 잔혹 — 업경은 몸이 아니라 방식을 읽는다.
+    const wasSubdued = enemy.statuses.some((s) => s.kind === "freeze" || s.kind === "bound" || s.kind === "sleep");
     enemy.alive = false;
     this.enemiesKilled++;
+    this.conduct.kills++;
+    if (wasSubdued) this.conduct.subdued++;
     this.fx.floatText(enemy.pos, "✦", enemy.color);
     enemy.def.onDeath?.(enemy, this);
     this.scheduler.remove(enemy);
@@ -762,6 +880,8 @@ export class Run implements GameContext {
 
     if (enemy.isBoss) {
       this.bossesKilled++;
+      // 六道: 이 court가 실제로 통과(격파)한 표식만 전륜 엔딩 집계에 든다.
+      if (this.pendingMark !== "none") this.markTally[this.pendingMark] = (this.markTally[this.pendingMark] ?? 0) + 1;
       this.discover("bosses", enemy.def.id);
       if (!this.meta.bossesDefeated.includes(enemy.def.id)) {
         this.meta.bossesDefeated.push(enemy.def.id); // 도장 (first-kill record)
