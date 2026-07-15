@@ -42,20 +42,25 @@ function makeButton(label: string, key: string, cls: string): HTMLButtonElement 
 export class TouchControls {
   private root: HTMLElement;
   private ctxBar!: HTMLElement;
-  private enabled: boolean;
+  private main!: HTMLElement;
+  /** The movement d-pad + 확인/취소 only make sense on touch / narrow screens;
+   * the scene-specific button row (ctxBar) is always shown so every menu action
+   * is clickable on desktop too. */
+  private showMain: boolean;
 
   constructor(private renderer: Renderer) {
-    this.enabled = TouchControls.shouldShow();
+    this.showMain = TouchControls.shouldShow();
     this.root = document.createElement("div");
     this.root.id = "touch-controls";
     this.build();
     document.getElementById("app")?.appendChild(this.root);
-    this.refresh();
+    this.applyMainVisibility();
+    this.applyInset();
     window.addEventListener("resize", () => {
-      // Re-measure on every resize/orientation change — the ctx row may wrap to a
-      // different number of lines in landscape vs portrait, changing our height.
-      this.enabled = TouchControls.shouldShow();
-      this.root.style.display = this.enabled ? "" : "none";
+      // The d-pad appears/disappears with viewport; the ctx row may also wrap to a
+      // different number of lines, changing our reserved height.
+      this.showMain = TouchControls.shouldShow();
+      this.applyMainVisibility();
       this.applyInset();
       requestAnimationFrame(() => this.applyInset());
     });
@@ -66,14 +71,13 @@ export class TouchControls {
     return touch || window.innerWidth < 820;
   }
 
-  private refresh(): void {
-    this.root.style.display = this.enabled ? "" : "none";
-    this.applyInset();
+  private applyMainVisibility(): void {
+    this.main.style.display = this.showMain ? "" : "none";
   }
 
-  /** Reserve exactly the controls' rendered height (it grows if the ctx row wraps). */
+  /** Reserve exactly the controls' rendered height (grows if the ctx row wraps). */
   private applyInset(): void {
-    this.renderer.uiInsetBottom = this.enabled ? this.root.offsetHeight || CONTROLS_H : 0;
+    this.renderer.uiInsetBottom = this.root.offsetHeight || (this.showMain ? CONTROLS_H : 44);
   }
 
   private build(): void {
@@ -81,8 +85,8 @@ export class TouchControls {
     this.ctxBar.className = "tc-ctx";
     this.root.appendChild(this.ctxBar);
 
-    const main = document.createElement("div");
-    main.className = "tc-main";
+    this.main = document.createElement("div");
+    this.main.className = "tc-main";
 
     const dpad = document.createElement("div");
     dpad.className = "tc-dpad";
@@ -90,15 +94,15 @@ export class TouchControls {
     dpad.appendChild(makeButton("◀", "ArrowLeft", "tc-left"));
     dpad.appendChild(makeButton("▶", "ArrowRight", "tc-right"));
     dpad.appendChild(makeButton("▼", "ArrowDown", "tc-down"));
-    main.appendChild(dpad);
+    this.main.appendChild(dpad);
 
     const act = document.createElement("div");
     act.className = "tc-act";
     act.appendChild(makeButton("확인", "Enter", "tc-a"));
     act.appendChild(makeButton("취소", "Escape", "tc-b"));
-    main.appendChild(act);
+    this.main.appendChild(act);
 
-    this.root.appendChild(main);
+    this.root.appendChild(this.main);
   }
 
   /** Update the scene-specific button row (called on scene change). */

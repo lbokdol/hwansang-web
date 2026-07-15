@@ -42,6 +42,9 @@ class AudioEngine {
   private buffers: Record<string, AudioBuffer> = {};
   private bgmName: string | null = null;
   private bgmCur: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  /** Bumped on every music() request; a swap only starts a source if it's still the latest.
+   * Prevents overlapping BGM when several tracks are requested during uncached loads. */
+  private bgmGen = 0;
   private preloaded = false;
 
   private ensure(): AudioContext | null {
@@ -73,7 +76,7 @@ class AudioEngine {
       this.preloaded = true;
       for (const name of Object.keys(fileUrl)) if (name.startsWith("sfx_")) void this.load(name);
     }
-    if (this.bgmName && !this.bgmCur) void this.swapBgm(this.bgmName);
+    if (this.bgmName && !this.bgmCur) void this.swapBgm(this.bgmName, ++this.bgmGen);
   }
 
   private async load(name: string): Promise<AudioBuffer | null> {
@@ -114,38 +117,46 @@ class AudioEngine {
     if (name === this.bgmName) return;
     this.bgmName = name;
     if (!this.ensure()) return; // before first gesture; resume() will start it
-    void this.swapBgm(name);
+    void this.swapBgm(name, ++this.bgmGen);
   }
 
-  private async swapBgm(name: string | null): Promise<void> {
+  /** Fade out + stop the currently-playing BGM (if any). */
+  private stopCurrent(fadeTime = 1.2): void {
+    const cur = this.bgmCur;
+    this.bgmCur = null;
+    if (!cur || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    try {
+      cur.gain.gain.cancelScheduledValues(now);
+      cur.gain.gain.setValueAtTime(Math.max(0.0001, cur.gain.gain.value), now);
+      cur.gain.gain.linearRampToValueAtTime(0.0001, now + fadeTime);
+      cur.src.stop(now + fadeTime + 0.1);
+    } catch {
+      /* already stopped */
+    }
+  }
+
+  private async swapBgm(name: string | null, gen: number): Promise<void> {
     const ctx = this.ensure();
     if (!ctx || !this.musicBus) return;
-    const now = ctx.currentTime;
-    if (this.bgmCur) {
-      const old = this.bgmCur;
-      this.bgmCur = null;
-      try {
-        old.gain.gain.cancelScheduledValues(now);
-        old.gain.gain.setValueAtTime(Math.max(0.0001, old.gain.gain.value), now);
-        old.gain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
-        old.src.stop(now + 1.3);
-      } catch {
-        /* ignore */
-      }
+    // Decode first (may await on the initial, uncached load), THEN check we're
+    // still the latest request. Superseded swaps abort before starting anything,
+    // so exactly one source is ever playing.
+    let buf: AudioBuffer | null = null;
+    if (name) {
+      buf = await this.load(name);
+      if (gen !== this.bgmGen) return; // a newer music() call won
     }
-    if (!name) return;
-    const buf = await this.load(name);
-    if (!buf || this.bgmName !== name) return; // target changed while loading
-    const ctx2 = this.ensure();
-    if (!ctx2 || !this.musicBus) return;
-    const src = ctx2.createBufferSource();
+    this.stopCurrent(); // crossfade out whatever is playing now
+    if (!name || !buf || !this.musicBus) return;
+    const src = ctx.createBufferSource();
     src.buffer = buf;
     src.loop = true;
-    const g = ctx2.createGain();
+    const g = ctx.createGain();
     g.gain.value = 0.0001;
     src.connect(g);
     g.connect(this.musicBus);
-    const t = ctx2.currentTime;
+    const t = ctx.currentTime;
     g.gain.exponentialRampToValueAtTime(1, t + 1.2);
     src.start();
     this.bgmCur = { src, gain: g };
