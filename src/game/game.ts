@@ -10,6 +10,8 @@ export interface Scene {
   update?(dt: number): void;
   render(r: Renderer): void;
   handleKey(e: KeyboardEvent): void;
+  /** Left-click at CSS-px (x,y) relative to the canvas — for clickable menu UI. */
+  handleClick?(x: number, y: number): void;
   /** Scene-specific on-screen touch buttons (label + key to dispatch). */
   touchBar?(): TouchButton[];
   exit?(): void;
@@ -33,6 +35,23 @@ export class Game {
 
     window.addEventListener("keydown", this.onKey);
     window.addEventListener("resize", () => this.renderer.resize());
+
+    // Pointer → UI hover + click (menus draw clickable buttons in-canvas).
+    const cv = this.renderer.canvas;
+    cv.addEventListener("pointermove", (e) => {
+      const rect = cv.getBoundingClientRect();
+      this.renderer.mouse = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    });
+    cv.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      sfx.resume();
+      const rect = cv.getBoundingClientRect();
+      this.scene.handleClick?.(e.clientX - rect.left, e.clientY - rect.top);
+    });
+    cv.addEventListener("pointerleave", () => {
+      this.renderer.mouse = { x: -1, y: -1 };
+    });
+
     requestAnimationFrame(this.frame);
   }
 

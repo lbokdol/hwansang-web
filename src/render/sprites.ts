@@ -122,3 +122,8 @@ export function altarSprite(): HTMLImageElement | null {
 export function hubBackground(): HTMLImageElement | null {
   return ready("hs_myeongbu_bg");
 }
+
+/** UI chrome sprite by short key (e.g. "frame", "btn", "ico_karma", "soul_warrior"). */
+export function uiSprite(key: string): HTMLImageElement | null {
+  return ready(`hs_ui_${key}`);
+}
