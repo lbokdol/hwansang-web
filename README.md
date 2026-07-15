@@ -62,7 +62,7 @@ npm run preview  # 빌드 결과 미리보기
 
 - **이미지 에셋(스프라이트·배경)**: [codex](https://openai.com/) 기반 에셋 파이프라인으로 생성 후 후처리.
 - **음악(BGM)**: [Suno](https://suno.com/)로 생성.
-- **효과음(SFX)**: 절차적 생성.
+- **효과음(SFX)**: [Suno](https://suno.com/)로 생성.
 - **코드/설계**: AI 협업(Claude Code)으로 구현·리팩터링.
 
 자세한 AI 활용 구조와 프롬프트는 제출 문서(AI 활용 기술 문서 PDF)에 정리합니다.
