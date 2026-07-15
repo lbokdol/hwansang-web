@@ -16,7 +16,8 @@ import { getBoss } from "../src/content/bosses";
 import { recordKill, bestiaryTier, bestiaryJeonggiBonus } from "../src/meta/bestiary";
 import { addSoulXp, soulLevel, applySoulMastery } from "../src/meta/soulMastery";
 import { AFFIXES } from "../src/content/affixes";
-import { JUDGMENTS, emptyConduct, evaluateVerdict, type Conduct } from "../src/content/judgment";
+import { JUDGMENTS, emptyConduct, evaluateVerdict, evaluateVerdictExcept, secondVerdict, type Conduct } from "../src/content/judgment";
+import { getCurse } from "../src/content/curses";
 import { vowsKarmaBonus } from "../src/content/vows";
 import { dailyForKey, buildDailyLoadout, recordDaily } from "../src/content/daily";
 import { convertTiles } from "../src/content/bosses/patterns";
@@ -909,12 +910,80 @@ try {
   console.log(`weapons FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 규칙형 악연(무명·담경·이중심·업풍) ===");
+// 단일 악연만 드래프트한 메타를 만든다(스탯 페널티/규칙 플래그 격리 검증용).
+function withCurse(id: string) {
+  const m = defaultMeta();
+  m.cleared = true;
+  m.activeCurses = [id];
+  return m;
+}
+let curseOk = true;
+try {
+  // 네 악연 모두 레지스트리에 존재 + 로드아웃 규칙 플래그를 세운다.
+  const ids = ["no_light", "clouded_mirror", "double_judgment", "karmic_wind"];
+  const registered = ids.every((id) => getCurse(id) != null);
+  const noLight = buildLoadout(withCurse("no_light"));
+  const clouded = buildLoadout(withCurse("clouded_mirror"));
+  const doubleJ = buildLoadout(withCurse("double_judgment"));
+  const wind = buildLoadout(withCurse("karmic_wind"));
+  const flagsOk =
+    noLight.silentHell === true &&
+    clouded.suppressJeongsim === true &&
+    doubleJ.doubleVerdict === true &&
+    wind.eliteChanceBonus >= 0.12;
+
+  // 담경(曇鏡): 무흠(정심 자격) conduct라도 정심을 제외하면 방면으로 떨어진다.
+  const clean = emptyConduct();
+  const cloudedVerdict =
+    evaluateVerdict(clean).id === "jeongsim" && evaluateVerdictExcept(clean, "jeongsim").id === "pyeong";
+
+  // 이중심(二重審): 진노·탐욕이 동률(jin=tam=6)이면 둘 다 자격 → 최상위=진노(우선순위↑),
+  // 두 번째=탐욕. 왕이 두 죄를 함께 묻는다.
+  const both: Conduct = { ...emptyConduct(), subdued: 3, altarsTaken: 2 }; // jin=6, tam=6
+  const top = evaluateVerdict(both);
+  const second = secondVerdict(both, top.id);
+  const doubleVerdictOk = top.id === "jinno" && second != null && second.id === "tamyok";
+
+  // 무명(無明): 층 안내 메시지 억제 — silentHell 런은 일반 런보다 시작 메시지가 적다.
+  const plain = new Run(defaultMeta(), baseLoadout(), 91);
+  plain.start();
+  const silent = new Run(defaultMeta(), noLight, 91);
+  silent.start();
+  const silentOk = silent.messages.lines.length < plain.messages.lines.length;
+
+  curseOk = registered && flagsOk && cloudedVerdict && doubleVerdictOk && silentOk;
+  console.log(
+    `curses: registered=${registered} flags=${flagsOk} clouded=${cloudedVerdict} doubleVerdict=${doubleVerdictOk} silent(${silent.messages.lines.length}<${plain.messages.lines.length})=${silentOk} ok=${curseOk}`,
+  );
+} catch (err) {
+  curseOk = false;
+  console.log(`curses FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
+console.log("=== 설정(음량 지속) ===");
+let settingsOk = true;
+try {
+  const m = defaultMeta();
+  const defaultsOk = m.sfxVolume === 1 && m.musicVolume === 1;
+  // 저장→직렬화→역직렬화 후에도 음량이 보존된다(마이그레이션 fallback 포함).
+  m.sfxVolume = 0.3;
+  m.musicVolume = 0.6;
+  const round = JSON.parse(JSON.stringify(m)) as typeof m;
+  const persistOk = round.sfxVolume === 0.3 && round.musicVolume === 0.6;
+  settingsOk = defaultsOk && persistOk;
+  console.log(`settings: defaults=${defaultsOk} persist=${persistOk} ok=${settingsOk}`);
+} catch (err) {
+  settingsOk = false;
+  console.log(`settings FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), weapons(무기2차효과), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !curseOk || !settingsOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), weapons(무기2차효과), curses(규칙형악연), settings(음량), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

@@ -131,3 +131,17 @@ export const JUDGMENTS: VerdictDef[] = [
 export function evaluateVerdict(c: Conduct): VerdictDef {
   return JUDGMENTS.filter((v) => v.qualifies(c)).sort((a, b) => b.priority - a.priority)[0];
 }
+
+/** 담경(曇鏡): 특정 판결(예: 정심)을 제외하고 다시 평가. 방면(平)이 항상 남아 결과는 보장. */
+export function evaluateVerdictExcept(c: Conduct, excludeId: string): VerdictDef {
+  return JUDGMENTS.filter((v) => v.qualifies(c) && v.id !== excludeId).sort((a, b) => b.priority - a.priority)[0];
+}
+
+/** 이중심(二重審): 최상위 판결을 뺀 다음 죄(효과 있는 것만; 방면 제외). 없으면 null. */
+export function secondVerdict(c: Conduct, excludeId: string): VerdictDef | null {
+  return (
+    JUDGMENTS.filter((v) => v.qualifies(c) && v.id !== excludeId && v.id !== "pyeong").sort(
+      (a, b) => b.priority - a.priority,
+    )[0] ?? null
+  );
+}

@@ -33,12 +33,20 @@ const TAL: Record<string, string> = {
   guardian_talisman: "sfx_tal_guardian",
 };
 
+// Reference mix levels — the user volume (0..1) multiplies these so 100% keeps
+// the tuned balance and 0% mutes cleanly.
+const SFX_REF = 0.85;
+const MUSIC_REF = 0.4;
+
 class AudioEngine {
   enabled = true;
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private sfxBus: GainNode | null = null;
   private musicBus: GainNode | null = null;
+  /** User-set volumes (0..1). Persisted in MetaState, applied to the buses. */
+  private sfxVol = 1;
+  private musicVol = 1;
   private buffers: Record<string, AudioBuffer> = {};
   private bgmName: string | null = null;
   private bgmCur: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
@@ -58,13 +66,29 @@ class AudioEngine {
       this.master.gain.value = 0.9;
       this.master.connect(this.ctx.destination);
       this.sfxBus = this.ctx.createGain();
-      this.sfxBus.gain.value = 0.85;
+      this.sfxBus.gain.value = SFX_REF * this.sfxVol;
       this.sfxBus.connect(this.master);
       this.musicBus = this.ctx.createGain();
-      this.musicBus.gain.value = 0.4;
+      this.musicBus.gain.value = MUSIC_REF * this.musicVol;
       this.musicBus.connect(this.master);
     }
     return this.ctx;
+  }
+
+  /** Set persisted volumes (0..1) and apply live to the buses. */
+  setSfxVolume(v: number): void {
+    this.sfxVol = Math.max(0, Math.min(1, v));
+    if (this.sfxBus) this.sfxBus.gain.value = SFX_REF * this.sfxVol;
+  }
+  setMusicVolume(v: number): void {
+    this.musicVol = Math.max(0, Math.min(1, v));
+    if (this.musicBus) this.musicBus.gain.value = MUSIC_REF * this.musicVol;
+  }
+  getSfxVolume(): number {
+    return this.sfxVol;
+  }
+  getMusicVolume(): number {
+    return this.musicVol;
   }
 
   /** Call on first user gesture: unlocks audio, preloads SFX, starts pending BGM. */

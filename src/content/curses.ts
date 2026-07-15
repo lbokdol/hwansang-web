@@ -107,6 +107,47 @@ export const CURSES: CurseDef[] = [
       lo.atk = Math.max(1, lo.atk - 1);
     },
   },
+  // ── 규칙형 악연: 스탯이 아니라 규칙을 바꾼다(윤회겁을 순수 슬라이더에서 질적 변주로) ──
+  {
+    id: "no_light",
+    name: "무명",
+    nameHanja: "無明",
+    desc: "길잡이 소멸 — 층 안내가 사라진다",
+    weight: 1,
+    apply: (lo) => {
+      lo.silentHell = true;
+    },
+  },
+  {
+    id: "clouded_mirror",
+    name: "담경",
+    nameHanja: "曇鏡",
+    desc: "보우 봉인 — 정심(무흠) 판결이 내려지지 않는다",
+    weight: 3,
+    apply: (lo) => {
+      lo.suppressJeongsim = true;
+    },
+  },
+  {
+    id: "double_judgment",
+    name: "이중심",
+    nameHanja: "二重審",
+    desc: "이중 심판 — 왕이 두 죄를 함께 묻는다",
+    weight: 3,
+    apply: (lo) => {
+      lo.doubleVerdict = true;
+    },
+  },
+  {
+    id: "karmic_wind",
+    name: "업풍",
+    nameHanja: "業風",
+    desc: "흉물 창궐 — 정예(흉물) 출현이 잦아진다",
+    weight: 2,
+    apply: (lo) => {
+      lo.eliteChanceBonus += 0.12;
+    },
+  },
 ];
 
 const MAP = new Map(CURSES.map((c) => [c.id, c]));

@@ -28,6 +28,9 @@ export class Game {
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new Renderer(canvas);
     this.meta = loadMeta();
+    // 설정: 저장된 음량을 오디오 엔진에 반영(엔진은 첫 제스처 때 생성되지만 값은 보관됨).
+    sfx.setSfxVolume(this.meta.sfxVolume);
+    sfx.setMusicVolume(this.meta.musicVolume);
     this.touch = new TouchControls(this.renderer);
     this.scene = new TitleScene(this);
     this.scene.enter?.();

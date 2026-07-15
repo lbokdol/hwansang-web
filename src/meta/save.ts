@@ -34,6 +34,8 @@ export function defaultMeta(): MetaState {
     dailyStreak: 0,
     dailyLastCompletedDate: "",
     dailyRewardsClaimed: [],
+    sfxVolume: 1,
+    musicVolume: 1,
   };
 }
 
@@ -61,6 +63,8 @@ function migrate(raw: Partial<MetaState>): MetaState {
     dailyStreak: raw.dailyStreak ?? base.dailyStreak,
     dailyLastCompletedDate: raw.dailyLastCompletedDate ?? base.dailyLastCompletedDate,
     dailyRewardsClaimed: raw.dailyRewardsClaimed ?? base.dailyRewardsClaimed,
+    sfxVolume: raw.sfxVolume ?? base.sfxVolume,
+    musicVolume: raw.musicVolume ?? base.musicVolume,
     version: SAVE_VERSION,
   };
 }

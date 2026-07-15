@@ -92,6 +92,7 @@ export class TitleScene implements Scene {
     r.ctx.globalAlpha = 0.4 + 0.6 * blink;
     r.text("Enter — 명부로 들어선다", cx, cy + 96, { color: INK, size: 16, align: "center" });
     r.ctx.globalAlpha = 1;
+    r.text("O — 설정", cx, cy + 128, { color: DIM, size: 13, align: "center" });
     r.text("방향키 이동 · 1~9 부적 · > 또는 Enter 하강 · . 대기", cx, r.contentBottom - 40, {
       color: DIM,
       size: 12,
@@ -101,10 +102,17 @@ export class TitleScene implements Scene {
 
   handleKey(e: KeyboardEvent): void {
     if (e.key === "Enter" || e.key === " ") this.game.setScene(new HubScene(this.game));
+    else if (e.key === "O" || e.key === "o") {
+      sfx.uiClick();
+      this.game.setScene(new SettingsScene(this.game, this));
+    }
   }
 
   touchBar() {
-    return [{ label: "시작", key: "Enter" }];
+    return [
+      { label: "시작", key: "Enter" },
+      { label: "설정 O", key: "O" },
+    ];
   }
 }
 
@@ -246,6 +254,7 @@ export class HubScene implements Scene {
       ];
       if (meta.cleared) items.push({ label: "윤회", onClick: () => this.game.setScene(new CycleScene(this.game)), accent: "#b08cff" });
       items.push({ label: "출발", onClick: () => this.game.setScene(new VowScene(this.game)), accent: "#ffd86b" });
+      items.push({ label: "설정", onClick: () => this.game.setScene(new SettingsScene(this.game, this)), accent: ui.MUTED });
       items.push({ label: "타이틀", onClick: () => this.game.setScene(new TitleScene(this.game)), accent: ui.MUTED });
       this.btn.bar(r, 36, barY, W - 72, barH, 10, items);
     }
@@ -293,6 +302,11 @@ export class HubScene implements Scene {
       case " ":
         this.game.setScene(new VowScene(this.game));
         break;
+      case "O":
+      case "o":
+        sfx.uiClick();
+        this.game.setScene(new SettingsScene(this.game, this));
+        break;
       case "Escape":
         this.game.setScene(new TitleScene(this.game));
         break;
@@ -310,6 +324,7 @@ export class HubScene implements Scene {
     ];
     if (this.game.meta.cleared) bar.push({ label: "윤회 R", key: "R" });
     bar.push({ label: "출발 S", key: "S" });
+    bar.push({ label: "설정 O", key: "O" });
     return bar;
   }
 
@@ -477,6 +492,240 @@ export class SoulSelectScene implements Scene {
       { label: "▼", key: "ArrowDown" },
       { label: "선택", key: "Enter" },
       { label: "뒤로", key: "Escape" },
+    ];
+  }
+}
+
+// ============================================================================
+// 설정 — 효과음/배경음 음량 + 전체화면. 이전 씬을 어둡게 깔고 액자 패널을 얹는다.
+// (웹은 한글 고정 + 단일 캔버스라 언어·해상도·수직동기는 생략. Port of Godot SettingsScene.)
+// ============================================================================
+export class SettingsScene implements Scene {
+  private sel = 0;
+  private btn = new UiButtons();
+  private sfxTrack: { x: number; y: number; w: number; h: number } | null = null;
+  private musTrack: { x: number; y: number; w: number; h: number } | null = null;
+  private static readonly ROWS = 4; // 효과음 · 배경음 · 전체화면 · 닫기
+
+  constructor(
+    private game: Game,
+    private back: Scene,
+  ) {}
+
+  handleClick(x: number, y: number): void {
+    if (this.sfxTrack && this.inRect(x, y, this.sfxTrack)) {
+      this.setVol(false, (x - this.sfxTrack.x) / this.sfxTrack.w);
+      return;
+    }
+    if (this.musTrack && this.inRect(x, y, this.musTrack)) {
+      this.setVol(true, (x - this.musTrack.x) / this.musTrack.w);
+      return;
+    }
+    this.btn.click(x, y);
+  }
+
+  private inRect(x: number, y: number, rct: { x: number; y: number; w: number; h: number }): boolean {
+    return x >= rct.x && y >= rct.y && x < rct.x + rct.w && y < rct.y + rct.h;
+  }
+
+  private setVol(music: boolean, v: number): void {
+    v = Math.max(0, Math.min(1, v));
+    if (music) {
+      this.game.meta.musicVolume = v;
+      sfx.setMusicVolume(v);
+    } else {
+      this.game.meta.sfxVolume = v;
+      sfx.setSfxVolume(v);
+    }
+    this.game.persist();
+    sfx.uiClick();
+  }
+
+  private addVol(music: boolean, delta: number): void {
+    this.setVol(music, (music ? this.game.meta.musicVolume : this.game.meta.sfxVolume) + delta);
+  }
+
+  private isFullscreen(): boolean {
+    return typeof document !== "undefined" && document.fullscreenElement != null;
+  }
+
+  private toggleFullscreen(): void {
+    sfx.uiClick();
+    if (typeof document === "undefined") return;
+    try {
+      if (document.fullscreenElement) void document.exitFullscreen();
+      else void document.documentElement.requestFullscreen();
+    } catch {
+      /* 전체화면이 차단된 환경 — 무시 */
+    }
+  }
+
+  private close(): void {
+    sfx.uiClick();
+    this.game.persist();
+    this.game.setScene(this.back);
+  }
+
+  render(r: Renderer): void {
+    // 뒤 씬을 어둡게 깔되, 공유 마우스로 인한 잔상 하이라이트는 잠시 화면 밖으로 밀어 억제.
+    const m = r.mouse;
+    r.mouse = { x: -1, y: -1 };
+    this.back.render(r);
+    r.mouse = m;
+    r.rect(0, 0, r.width, r.height, "rgba(5,4,10,0.8)");
+    r.vignette(0.5);
+
+    this.btn.begin(r);
+    const meta = this.game.meta;
+    const W = r.width;
+    const H = r.contentBottom;
+
+    const pw = Math.min(600, W * 0.86);
+    const ph = Math.min(400, H * 0.86);
+    const px = (W - pw) / 2;
+    const py = (H - ph) / 2;
+    ui.panel(r, px, py, pw, ph);
+
+    const cx = W / 2;
+    r.text("설정", cx, py + 54, { color: ui.GOLD_HI, size: 30, align: "center", bold: true, shadow: true });
+    ui.divider(r, cx, py + 72, pw - 80);
+
+    const labelX = px + 40;
+    const ctrlX = px + pw * 0.44;
+    const ctrlRight = px + pw - 40;
+    const top = py + 100;
+    const rowH = Math.min(56, (ph - 120) / SettingsScene.ROWS);
+
+    this.sfxTrack = null;
+    this.musTrack = null;
+
+    for (let i = 0; i < SettingsScene.ROWS; i++) {
+      const ry = top + i * rowH;
+      const cyc = ry + rowH / 2;
+      const sel = i === this.sel;
+      const rr = { x: px + 14, y: ry + 3, w: pw - 28, h: rowH - 6 };
+      if (sel) r.rect(rr.x, rr.y, rr.w, rr.h, ui.alpha("#2a2440", 0.8));
+      else if (this.btn.isHover(rr.x, rr.y, rr.w, rr.h)) r.rect(rr.x, rr.y, rr.w, rr.h, ui.alpha("#2a2440", 0.4));
+      if (sel) r.text("▸", px + 24, cyc + 6, { color: ui.GOLD_HI, size: 18 });
+
+      switch (i) {
+        case 0:
+          this.sfxTrack = this.sliderRow(r, "효과음", meta.sfxVolume, labelX, ctrlX, ctrlRight, cyc, rowH, () =>
+            this.addVol(false, -0.1),
+          );
+          break;
+        case 1:
+          this.musTrack = this.sliderRow(r, "배경음", meta.musicVolume, labelX, ctrlX, ctrlRight, cyc, rowH, () =>
+            this.addVol(true, -0.1),
+          );
+          break;
+        case 2: {
+          r.text("전체화면", labelX, cyc + 6, { color: ui.PARCHMENT, size: 20 });
+          const on = this.isFullscreen();
+          this.btn.button(
+            r,
+            ctrlRight - 130,
+            cyc - rowH * 0.28,
+            130,
+            rowH * 0.52,
+            on ? "켜짐" : "꺼짐",
+            () => this.toggleFullscreen(),
+            true,
+            on ? ui.GOLD : ui.MUTED,
+          );
+          break;
+        }
+        case 3:
+          this.btn.button(r, cx - 110, cyc - rowH * 0.3, 220, rowH * 0.58, "닫기", () => this.close());
+          break;
+      }
+    }
+
+    r.text("↑↓ 이동 · ←→ 조절 · Esc 닫기", cx, py + ph - 16, { color: ui.MUTED, size: 14, align: "center" });
+  }
+
+  /** 음량 슬라이더 행: 라벨 + 퍼센트 + −/+ 버튼 + 게이지. 게이지 클릭 판정 rect를 돌려준다. */
+  private sliderRow(
+    r: Renderer,
+    label: string,
+    value: number,
+    labelX: number,
+    ctrlX: number,
+    ctrlRight: number,
+    cyc: number,
+    rowH: number,
+    onMinus: () => void,
+  ): { x: number; y: number; w: number; h: number } {
+    const v = Math.max(0, Math.min(1, value));
+    const music = label === "배경음";
+    r.text(label, labelX, cyc + 6, { color: ui.PARCHMENT, size: 20 });
+    r.text(`${Math.round(v * 100)}%`, ctrlX - 12, cyc + 6, { color: ui.GOLD_HI, size: 17, align: "right" });
+    const aw = 30;
+    const bh = rowH * 0.5;
+    const by = cyc - bh / 2;
+    this.btn.button(r, ctrlX, by, aw, bh, "−", onMinus);
+    this.btn.button(r, ctrlRight - aw, by, aw, bh, "+", () => this.addVol(music, 0.1));
+    const sx = ctrlX + aw + 12;
+    const sw = ctrlRight - aw - 12 - sx;
+    const sh = 12;
+    const sy = cyc - sh / 2;
+    ui.bar(r, sx, sy, sw, sh, v, "#c9a84a");
+    return { x: sx, y: sy, w: sw, h: sh };
+  }
+
+  handleKey(e: KeyboardEvent): void {
+    switch (e.key) {
+      case "ArrowUp":
+        this.sel = (this.sel - 1 + SettingsScene.ROWS) % SettingsScene.ROWS;
+        sfx.uiClick();
+        break;
+      case "ArrowDown":
+        this.sel = (this.sel + 1) % SettingsScene.ROWS;
+        sfx.uiClick();
+        break;
+      case "ArrowLeft":
+        this.adjust(-1);
+        break;
+      case "ArrowRight":
+        this.adjust(1);
+        break;
+      case "Enter":
+        this.activate();
+        break;
+      case "Escape":
+      case "o":
+      case "O":
+        this.close();
+        break;
+    }
+  }
+
+  private adjust(dir: number): void {
+    switch (this.sel) {
+      case 0:
+        this.addVol(false, dir * 0.1);
+        break;
+      case 1:
+        this.addVol(true, dir * 0.1);
+        break;
+      case 2:
+        this.toggleFullscreen();
+        break;
+    }
+  }
+
+  private activate(): void {
+    if (this.sel === 2) this.toggleFullscreen();
+    else if (this.sel === 3) this.close();
+  }
+
+  touchBar() {
+    return [
+      { label: "▲", key: "ArrowUp" },
+      { label: "▼", key: "ArrowDown" },
+      { label: "－", key: "ArrowLeft" },
+      { label: "＋", key: "ArrowRight" },
+      { label: "닫기", key: "Escape" },
     ];
   }
 }
