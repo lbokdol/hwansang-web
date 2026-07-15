@@ -19,6 +19,8 @@ export interface RunOutcome {
   turns: number;
   /** 윤회겁: 이 런의 겁(劫). */
   cycle: number;
+  /** 서원(誓願): 파계 없이 지킨 계율 ids (업 배율 보너스). */
+  vowsKept: string[];
 }
 
 /**

@@ -11,6 +11,7 @@ import { updateRecords, TITLES, titleRank, getTitle } from "../meta/titles";
 import { recordGongdeok, GONGDEOK_TIERS } from "../meta/score";
 import { addSoulXp } from "../meta/soulMastery";
 import { CURSES, cycleOf, TRUE_END_CYCLE } from "../content/curses";
+import { VOWS, vowsKarmaBonus } from "../content/vows";
 
 interface EndInfo {
   gd: number;
@@ -210,7 +211,7 @@ export class HubScene implements Scene {
       case "S":
       case "s":
       case " ":
-        this.startRun();
+        this.game.setScene(new VowScene(this.game));
         break;
       case "Escape":
         this.game.setScene(new TitleScene(this.game));
@@ -236,10 +237,88 @@ export class HubScene implements Scene {
     this.game.persist();
   }
 
-  private startRun(): void {
-    const loadout = buildLoadout(this.game.meta);
-    const run = new Run(this.game.meta, loadout);
-    this.game.setScene(new RunScene(this.game, run));
+}
+
+// ============================================================================
+// 서원(誓願) — 런 시작 전 자기 제약 선택
+// ============================================================================
+export class VowScene implements Scene {
+  private sel = 0;
+  private selected = new Set<string>();
+  constructor(private game: Game) {}
+
+  render(r: Renderer): void {
+    r.clear("#0a0610");
+    const narrow = r.narrow;
+    r.text("서원(誓願)", 40, 52, { color: "#f4ead2", size: 26, bold: true });
+    r.text("이번 생을 어떤 계율로 살 것인가. 지킨 채 마치면 업이 크게 쌓인다 — 벌은 없다.", 40, 78, {
+      color: DIM,
+      size: 13,
+    });
+    const bonus = Math.round(vowsKarmaBonus([...this.selected]) * 100);
+    r.text(`선택한 서원 업 보너스: +${bonus}%`, 40, 108, { color: GOLD, size: 16, bold: true });
+
+    const listTop = narrow ? 150 : 144;
+    VOWS.forEach((v, i) => {
+      const on = this.selected.has(v.id);
+      const y = listTop + i * (narrow ? 44 : 46);
+      const seld = i === this.sel;
+      r.text(`${seld ? "▶ " : "  "}${on ? "◆" : "◇"} ${v.name}(${v.nameHanja})`, 40, y, {
+        color: on ? "#7be0a0" : seld ? "#cbbfd6" : "#6a6480",
+        size: narrow ? 15 : 16,
+        bold: seld,
+      });
+      r.text(`업 +${Math.round(v.karmaBonus * 100)}%`, r.width - (narrow ? 14 : 56), y, {
+        color: on ? GOLD : "#544e66",
+        size: 13,
+        align: "right",
+      });
+      r.text(v.desc, narrow ? 56 : 300, narrow ? y + 18 : y, {
+        color: on ? INK : "#544e66",
+        size: narrow ? 11 : 13,
+      });
+    });
+    r.text("↑↓ 선택 · Space 서원/해제 · Enter 시작 · Esc 명부로", r.width / 2, r.contentBottom - 32, {
+      color: INK,
+      size: 14,
+      align: "center",
+    });
+  }
+
+  handleKey(e: KeyboardEvent): void {
+    if (e.key === "ArrowUp" || e.key === "w") {
+      this.sel = (this.sel - 1 + VOWS.length) % VOWS.length;
+      sfx.uiClick();
+      return;
+    }
+    if (e.key === "ArrowDown" || e.key === "s") {
+      this.sel = (this.sel + 1) % VOWS.length;
+      sfx.uiClick();
+      return;
+    }
+    if (e.key === " ") {
+      const id = VOWS[this.sel].id;
+      if (this.selected.has(id)) this.selected.delete(id);
+      else this.selected.add(id);
+      sfx.upgradeBuy();
+      return;
+    }
+    if (e.key === "Enter") {
+      const loadout = buildLoadout(this.game.meta);
+      loadout.activeVows = [...this.selected];
+      const run = new Run(this.game.meta, loadout);
+      this.game.setScene(new RunScene(this.game, run));
+      return;
+    }
+    if (e.key === "Escape") this.game.setScene(new HubScene(this.game));
+  }
+
+  touchBar() {
+    return [
+      { label: "서원 Space", key: " " },
+      { label: "시작 Enter", key: "Enter" },
+      { label: "취소 Esc", key: "Escape" },
+    ];
   }
 }
 
@@ -678,8 +757,11 @@ export class RunScene implements Scene {
     this.ended = true;
     const meta = this.game.meta;
     const outcome = this.run.getOutcome();
-    // 윤회겁 보너스: 겁이 높을수록 업이 더 쌓인다.
-    const earned = Math.round(karmaForRun(outcome, this.run.loadout.karmaMultiplier) * (1 + 0.05 * outcome.cycle));
+    // 윤회겁 보너스(겁이 높을수록 업↑) + 서원 성취 보너스(지킨 계율의 업 배율 합).
+    const vowBonus = vowsKarmaBonus(outcome.vowsKept);
+    const earned = Math.round(
+      karmaForRun(outcome, this.run.loadout.karmaMultiplier + vowBonus) * (1 + 0.05 * outcome.cycle),
+    );
     awardKarma(meta, earned);
     sfx.karmaGain();
     meta.runs++;
