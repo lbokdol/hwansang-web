@@ -260,6 +260,9 @@ export class HubScene implements Scene {
 
   touchBar() {
     const bar = [
+      { label: "▲", key: "ArrowUp" },
+      { label: "▼", key: "ArrowDown" },
+      { label: "강화", key: "Enter" },
       { label: "화신 C", key: "C" },
       { label: "도감 D", key: "D" },
       { label: "고시 F", key: "F" },
@@ -355,9 +358,11 @@ export class VowScene implements Scene {
 
   touchBar() {
     return [
-      { label: "서원 Space", key: " " },
-      { label: "시작 Enter", key: "Enter" },
-      { label: "취소 Esc", key: "Escape" },
+      { label: "▲", key: "ArrowUp" },
+      { label: "▼", key: "ArrowDown" },
+      { label: "서원", key: " " },
+      { label: "시작", key: "Enter" },
+      { label: "취소", key: "Escape" },
     ];
   }
 }
@@ -530,7 +535,12 @@ export class CodexScene implements Scene {
   }
 
   touchBar() {
-    return [{ label: "전환 Tab", key: "Tab" }];
+    return [
+      { label: "▲", key: "ArrowUp" },
+      { label: "▼", key: "ArrowDown" },
+      { label: "전환 Tab", key: "Tab" },
+      { label: "명부", key: "Escape" },
+    ];
   }
 }
 
@@ -612,6 +622,15 @@ export class CycleScene implements Scene {
     if (e.key === "Escape" || e.key === "r" || e.key === "R") {
       this.game.setScene(new HubScene(this.game));
     }
+  }
+
+  touchBar() {
+    return [
+      { label: "▲", key: "ArrowUp" },
+      { label: "▼", key: "ArrowDown" },
+      { label: "드리우기", key: "Enter" },
+      { label: "명부", key: "Escape" },
+    ];
   }
 }
 
