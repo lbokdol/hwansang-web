@@ -18,7 +18,7 @@ import { getVow } from "../content/vows";
 import { getCurse } from "../content/curses";
 import * as ui from "./chrome";
 import { UiButtons, type BarItem } from "./buttons";
-import { soulLevel } from "../meta/soulMastery";
+import { soulLevel, soulProgress, SOUL_MASTERY_MAX_LEVEL } from "../meta/soulMastery";
 
 const BLESS_TAG_COLOR: Record<BlessingTag, string> = {
   cheong: "#7be0a0",
@@ -208,7 +208,7 @@ export class HubScene implements Scene {
       const syc = py + 36 + box / 2;
       ui.icon(r, `soul_${soul.id}`, sxc, syc, box);
       r.text(soul.name, sxc, syc + box * 0.5 + 26, { color: ui.GOLD_HI, size: 24, align: "center", shadow: true });
-      this.btn.hit(sxc - box / 2, syc - box / 2, box, box + 40, () => this.cycleSoul());
+      this.btn.hit(sxc - box / 2, syc - box / 2, box, box + 40, () => this.game.setScene(new SoulSelectScene(this.game)));
 
       const cardX = px + pw + 24;
       const cardW = W - cardX - 36;
@@ -240,7 +240,7 @@ export class HubScene implements Scene {
     // bottom action bar (desktop; on mobile the DOM control bar provides these)
     if (desktop) {
       const items: BarItem[] = [
-        { label: "화신", onClick: () => this.cycleSoul(), accent: ui.GOLD },
+        { label: "화신", onClick: () => this.game.setScene(new SoulSelectScene(this.game)), accent: ui.GOLD },
         { label: "도감", onClick: () => this.game.setScene(new CodexScene(this.game)), accent: ui.GOLD },
         { label: "고시", onClick: () => this.game.setScene(new DailyScene(this.game)), accent: "#7fe8c8" },
       ];
@@ -270,8 +270,8 @@ export class HubScene implements Scene {
         break;
       case "C":
       case "c":
-        this.cycleSoul();
         sfx.uiClick();
+        this.game.setScene(new SoulSelectScene(this.game));
         break;
       case "D":
       case "d":
@@ -313,14 +313,172 @@ export class HubScene implements Scene {
     return bar;
   }
 
-  private cycleSoul(): void {
-    const meta = this.game.meta;
-    const unlocked = SOULS.filter((s) => s.isUnlocked(meta));
-    const cur = unlocked.findIndex((s) => s.id === meta.selectedSoul);
-    meta.selectedSoul = unlocked[(cur + 1) % unlocked.length].id;
-    this.game.persist();
+}
+
+// ============================================================================
+// 화신 선택 — 영혼 로스터(초상 + 숙련 + 특성 + 해금 상태)
+// ============================================================================
+export class SoulSelectScene implements Scene {
+  private sel = 0;
+  private btn = new UiButtons();
+  constructor(private game: Game) {
+    const i = SOULS.findIndex((s) => s.id === game.meta.selectedSoul);
+    if (i >= 0) this.sel = i;
   }
 
+  handleClick(x: number, y: number): void {
+    this.btn.click(x, y);
+  }
+
+  private equip(): void {
+    const s = SOULS[this.sel];
+    if (!s.isUnlocked(this.game.meta)) {
+      sfx.uiClick();
+      return;
+    }
+    if (s.id !== this.game.meta.selectedSoul) {
+      this.game.meta.selectedSoul = s.id;
+      this.game.persist();
+      sfx.upgradeBuy();
+    }
+    this.game.setScene(new HubScene(this.game));
+  }
+
+  render(r: Renderer): void {
+    ui.backdrop(r, hubBackground(), "#0b0a10", 0.46);
+    this.btn.begin(r);
+    const meta = this.game.meta;
+    const W = r.width;
+    const H = r.contentBottom;
+    const desktop = r.uiInsetBottom === 0;
+    r.text("화신 선택", 48, 78, { color: ui.GOLD, size: 40, bold: true, shadow: true });
+
+    const barH = 40;
+    const barY = H - barH - 14;
+    const top = 104;
+    const bottom = (desktop ? barY - 18 : H - 18);
+    const lh = bottom - top;
+
+    // left roster
+    const lx = 36;
+    const lw = Math.min(360, W * 0.42);
+    ui.panel(r, lx, top, lw, lh);
+    const rowH = (lh - 28) / SOULS.length;
+    for (let i = 0; i < SOULS.length; i++) {
+      const s = SOULS[i];
+      const unlocked = s.isUnlocked(meta);
+      const selected = i === this.sel;
+      const current = s.id === meta.selectedSoul;
+      const ry = top + 14 + i * rowH;
+      const rrx = lx + 10;
+      const rrw = lw - 20;
+      const rrh = rowH - 6;
+      if (selected) r.rect(rrx, ry, rrw, rrh, ui.alpha("#2c2540", 0.9));
+      else if (this.btn.isHover(rrx, ry, rrw, rrh)) r.rect(rrx, ry, rrw, rrh, ui.alpha("#2c2540", 0.45));
+      const idx = i;
+      this.btn.hit(rrx, ry, rrw, rrh, () => {
+        this.sel = idx;
+        sfx.uiClick();
+      });
+      const thumb = rowH - 18;
+      const tcx = lx + 26 + thumb / 2;
+      const tcy = ry + (rowH - 6) / 2;
+      if (ui.hasIcon(`soul_${s.id}`)) ui.icon(r, `soul_${s.id}`, tcx, tcy, thumb);
+      const nx = lx + 26 + thumb + 12;
+      const col = !unlocked ? "#6b6478" : selected ? ui.GOLD_HI : "#e4d8bd";
+      r.text(s.name, nx, tcy - 2, { color: col, size: 20 });
+      const secondary = !unlocked ? "🔒 잠김" : current ? "착용 중" : s.nameHanja;
+      r.text(secondary, nx, tcy + 18, { color: current ? "#7be0a0" : unlocked ? "#9a8444" : "#7a3a4a", size: 13 });
+    }
+
+    // right detail
+    const sel = SOULS[this.sel];
+    const selUnlocked = sel.isUnlocked(meta);
+    const selCurrent = sel.id === meta.selectedSoul;
+    const dx = lx + lw + 24;
+    const dw = W - dx - 36;
+    if (dw > 160) {
+      ui.panel(r, dx, top, dw, lh);
+      const pcx = dx + dw * 0.72;
+      const pcy = top + 40 + Math.min(150, lh * 0.4);
+      const pbox = Math.min(300, dw * 0.5);
+      if (ui.hasIcon(`soul_${sel.id}`)) ui.icon(r, `soul_${sel.id}`, pcx, pcy, pbox);
+      if (!selUnlocked) r.text("🔒", pcx, pcy, { color: "#d8c46b", size: 64, align: "center", shadow: true });
+
+      const tx = dx + 30;
+      let ty = top + 50;
+      const wrapW = dw * 0.5;
+      r.text(sel.name, tx, ty, { color: selUnlocked ? ui.GOLD_HI : "#8a8398", size: 34, shadow: true });
+      ty += 36;
+      if (selUnlocked) {
+        const xp = meta.soulXp[sel.id] ?? 0;
+        r.text(`화신 숙련 Lv.${soulLevel(xp)}/${SOUL_MASTERY_MAX_LEVEL}`, tx, ty, { color: "#c5a6ff", size: 18, shadow: true });
+        r.bar(tx, ty + 10, dw * 0.3, 5, soulProgress(xp), "#b08cff", "rgba(42,36,64,0.7)");
+        ty += 32;
+      }
+      r.rect(tx, ty, dw * 0.42, 2, "#3a3550");
+      ty += 26;
+      for (const ln of ui.wrap(r, sel.desc, 18, wrapW)) {
+        r.text(ln, tx, ty, { color: "#d7cbb2", size: 18, shadow: true });
+        ty += 26;
+      }
+      ty += 12;
+      if (selCurrent) {
+        r.text("▸ 착용 중", tx, ty, { color: "#7be0a0", size: 20, shadow: true });
+      } else if (!selUnlocked) {
+        for (const ln of ui.wrap(r, "🔒 " + sel.unlockHint, 17, wrapW)) {
+          r.text(ln, tx, ty, { color: "#e08a9a", size: 17, shadow: true });
+          ty += 24;
+        }
+      }
+
+      if (desktop) {
+        const items: BarItem[] = [
+          { label: "선택", onClick: () => this.equip(), enabled: selUnlocked && !selCurrent, accent: "#ffd86b" },
+          { label: "뒤로", onClick: () => this.game.setScene(new HubScene(this.game)), accent: ui.MUTED },
+        ];
+        this.btn.bar(r, dx, barY, dw, barH, 12, items);
+      }
+    }
+  }
+
+  handleKey(e: KeyboardEvent): void {
+    switch (e.key) {
+      case "ArrowUp":
+      case "ArrowLeft":
+      case "w":
+      case "a":
+        this.sel = (this.sel - 1 + SOULS.length) % SOULS.length;
+        sfx.uiClick();
+        break;
+      case "ArrowDown":
+      case "ArrowRight":
+      case "s":
+      case "d":
+        this.sel = (this.sel + 1) % SOULS.length;
+        sfx.uiClick();
+        break;
+      case "Enter":
+      case " ":
+        this.equip();
+        break;
+      case "Escape":
+      case "C":
+      case "c":
+        sfx.uiClick();
+        this.game.setScene(new HubScene(this.game));
+        break;
+    }
+  }
+
+  touchBar() {
+    return [
+      { label: "▲", key: "ArrowUp" },
+      { label: "▼", key: "ArrowDown" },
+      { label: "선택", key: "Enter" },
+      { label: "뒤로", key: "Escape" },
+    ];
+  }
 }
 
 // ============================================================================
