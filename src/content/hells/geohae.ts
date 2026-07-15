@@ -2,6 +2,7 @@
 // 동적 이동 톱날(SawTick)은 정적 산포로 단순화 이식.
 
 import type { HellDef, TileDef } from "../../core/types";
+import { sawTick } from "./dynamics";
 
 const SAW_TILE: TileDef = {
   id: "geohae_saw",
@@ -45,4 +46,5 @@ export const geohaeHell: HellDef = {
     const n = Math.floor(floors.length * (0.04 + 0.015 * ctx.depth));
     for (let i = 0; i < n; i++) level.setTile(floors[i], SAW_TILE.id);
   },
+  onFloorTick: sawTick, // 톱날 선이 방을 가로질러 오간다
 };

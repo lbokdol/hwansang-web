@@ -2,6 +2,7 @@
 // 동적 먹줄 쓸기(RopeTick)는 정적 산포로 단순화 이식.
 
 import type { HellDef, TileDef } from "../../core/types";
+import { ropeTick } from "./dynamics";
 
 const INK_TILE: TileDef = {
   id: "heukseung_ink",
@@ -45,4 +46,5 @@ export const heukseungHell: HellDef = {
     const n = Math.floor(floors.length * (0.03 + 0.012 * ctx.depth));
     for (let i = 0; i < n; i++) level.setTile(floors[i], INK_TILE.id);
   },
+  onFloorTick: ropeTick, // 먹줄 선이 방을 쓸어간다
 };

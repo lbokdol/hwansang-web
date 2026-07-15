@@ -2,6 +2,7 @@
 // 동적 호흡 바닥(BreatheTick)은 정적 산포로 단순화 이식.
 
 import type { HellDef, TileDef } from "../../core/types";
+import { breatheTick } from "./dynamics";
 
 const MOLTEN_TILE: TileDef = {
   id: "yangdong_molten",
@@ -11,7 +12,8 @@ const MOLTEN_TILE: TileDef = {
   bg: "#1a0f08",
   walkable: true,
   opaque: false,
-  hazard: { damage: 4, damageKind: "fire", status: { kind: "burn", turns: 2, power: 2 }, trigger: "enter" },
+  // 머무는 동안 매 턴 피해(Stand) — 호흡으로 바닥이 발밑에서 녹으면 비켜서야 한다.
+  hazard: { damage: 4, damageKind: "fire", trigger: "stand" },
 };
 
 export const yangdongHell: HellDef = {
@@ -45,4 +47,5 @@ export const yangdongHell: HellDef = {
     const n = Math.floor(floors.length * (0.04 + 0.015 * ctx.depth));
     for (let i = 0; i < n; i++) level.setTile(floors[i], MOLTEN_TILE.id);
   },
+  onFloorTick: breatheTick, // 바닥이 band별로 안전↔용해를 호흡
 };

@@ -2,6 +2,7 @@
 // 동적 되울림(EchoTick)은 정적 산포로 단순화 이식.
 
 import type { HellDef, TileDef } from "../../core/types";
+import { echoTick } from "./dynamics";
 
 const ECHO_TILE: TileDef = {
   id: "balseol_echo",
@@ -45,4 +46,5 @@ export const balseolHell: HellDef = {
     const n = Math.floor(floors.length * (0.02 + 0.01 * ctx.depth));
     for (let i = 0; i < n; i++) level.setTile(floors[i], ECHO_TILE.id);
   },
+  onFloorTick: echoTick, // 지나온 자취가 솟았다 사라지는 되울림
 };

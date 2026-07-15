@@ -2,6 +2,7 @@
 // 동적 회전 해저드(RotorTick, 역대 5해저드 순환)는 정적 산포로 단순화 이식.
 
 import type { HellDef, TileDef } from "../../core/types";
+import { rotorTick } from "./dynamics";
 
 const WHEEL_TILE: TileDef = {
   id: "yukdo_wheel",
@@ -45,4 +46,5 @@ export const yukdoHell: HellDef = {
     const n = Math.floor(floors.length * (0.03 + 0.012 * ctx.depth));
     for (let i = 0; i < n; i++) level.setTile(floors[i], WHEEL_TILE.id);
   },
+  onFloorTick: rotorTick, // 역대 5해저드가 한 번에 하나씩 순환하며 쓸어간다
 };
