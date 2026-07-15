@@ -15,6 +15,7 @@ import type {
   RunLoadout,
   StatusKind,
   TargetInfo,
+  WeaponDef,
 } from "../core/types";
 import { FxSystem } from "../render/fx";
 import { Player } from "../entities/player";
@@ -432,7 +433,7 @@ export class Run implements GameContext {
 
   private takeEnemyTurn(enemy: Enemy): void {
     // FOV-gated activation: dormant until first seen, or adjacent to the player
-    // (레벨디자인 §4.2). Bosses spawn awake.
+    // (레벨디자인 §4.2) — bosses included, so a king never strikes from off-screen.
     if (!enemy.awake) {
       if (this.level.isVisible(enemy.pos) || manhattan(enemy.pos, this.player.pos) <= 1) {
         enemy.awake = true;
@@ -513,15 +514,15 @@ export class Run implements GameContext {
   private playerAttack(target: Enemy, dest: Pos, dir: Pos): boolean {
     const w = this.player.weapon;
     let dmg = Math.max(1, this.effAtk(this.player) + w.atkBonus - this.effDef(target));
-    // 통찰(癡) 삼매: 치명타 — 평타 2배.
-    if (this.player.critChance > 0 && this.rng.chance(this.player.critChance)) {
+    // 통찰(癡) 삼매 + 환도 급소: 치명타 — 평타 2배.
+    if (this.rng.chance(this.player.critChance + (w.critBonus ?? 0))) {
       dmg *= 2;
       this.fx.floatText(target.pos, "치명!", "#ff5a5a");
     }
-    this.dealDamage(target, dmg, { source: this.player, kind: "physical" });
+    if (this.dealDamage(target, dmg, { source: this.player, kind: "physical" }) > 0) this.applyWeaponOnHit(w, target);
     // 무사혼 패시브: 가끔 추가타
     if (target.alive && this.player.bonusAttackChance > 0 && this.rng.chance(this.player.bonusAttackChance)) {
-      this.dealDamage(target, dmg, { source: this.player, kind: "physical" });
+      if (this.dealDamage(target, dmg, { source: this.player, kind: "physical" }) > 0) this.applyWeaponOnHit(w, target);
       this.fx.floatText(target.pos, "연타!", "#ffd86b");
     }
     // 석장: 사거리 2 — 앞의 적까지 (대상별 방어력으로 재계산)
@@ -529,7 +530,7 @@ export class Run implements GameContext {
       const beyond = this.enemyAt(add(dest, dir));
       if (beyond) {
         const dmg2 = Math.max(1, this.effAtk(this.player) + w.atkBonus - this.effDef(beyond));
-        this.dealDamage(beyond, dmg2, { source: this.player, kind: "physical" });
+        if (this.dealDamage(beyond, dmg2, { source: this.player, kind: "physical" }) > 0) this.applyWeaponOnHit(w, beyond);
       }
     }
     // 도깨비방망이: 넉백
@@ -540,6 +541,17 @@ export class Run implements GameContext {
       return false;
     }
     return true;
+  }
+
+  /** 무기 타격 부가효과: 회향(혼백 회복) + 상태부여(둔화·출혈). */
+  private applyWeaponOnHit(w: WeaponDef, target: Enemy): void {
+    if (w.soulOnHit && this.rng.chance(w.soulOnHitChance ?? 1)) {
+      this.heal(this.player, w.soulOnHit);
+      this.fx.floatText(this.player.pos, "회향", "#7be0a0");
+    }
+    if (target.alive && w.onHit && this.rng.chance(w.onHitChance ?? 1)) {
+      this.applyStatus(target, w.onHit.kind, w.onHit.turns, w.onHit.power, this.player);
+    }
   }
 
   /** Push an enemy `dist` tiles; blocked → impact damage, into hazards → hazard. */

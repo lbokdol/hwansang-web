@@ -171,6 +171,14 @@ export interface WeaponDef {
   knockback: number;
   /** Chance a bump attack does NOT consume the turn (extra action). */
   extraActionChance: number;
+  /** 念珠 회향: chance to heal this much on a landed hit. */
+  soulOnHit?: number;
+  soulOnHitChance?: number;
+  /** 錫杖/棒: status inflicted on a landed hit (with onHitChance). */
+  onHit?: { kind: StatusKind; turns: number; power: number };
+  onHitChance?: number;
+  /** 環刀 급소: added to the player's crit chance while wielding this. */
+  critBonus?: number;
 }
 
 // ---- talismans (부적) -----------------------------------------------------

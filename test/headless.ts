@@ -20,6 +20,7 @@ import { JUDGMENTS, emptyConduct, evaluateVerdict, type Conduct } from "../src/c
 import { vowsKarmaBonus } from "../src/content/vows";
 import { dailyForKey, buildDailyLoadout, recordDaily } from "../src/content/daily";
 import { convertTiles } from "../src/content/bosses/patterns";
+import { getWeapon } from "../src/content/weapons";
 import type { RunLoadout } from "../src/core/types";
 
 registerAllHellTiles();
@@ -870,12 +871,50 @@ try {
   console.log(`fixes FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 무기 2차 효과 ===");
+let weaponOk = true;
+try {
+  // 석장 둔화(35%): 인접 적 반복 타격 → 둔화 부여됨 + 회향(염주) 회복 검증.
+  const run = new Run(defaultMeta(), maxed, 81);
+  run.start();
+  run.player.weapon = getWeapon("seokjang");
+  const p = run.player.pos;
+  let cell: Pos | null = null;
+  for (const d of DIRS4) {
+    const c = { x: p.x + d.x, y: p.y + d.y };
+    if (!run.isWall(c) && !run.actorAt(c)) { cell = c; break; }
+  }
+  let slowSeen = false;
+  if (cell) {
+    const e = run.spawnEnemy("dosan_okjol", cell);
+    if (e) {
+      e.stats.maxHp = 99999;
+      e.stats.hp = 99999; // 살려두고 여러 번 때린다
+      const dir = { x: cell.x - run.player.pos.x, y: cell.y - run.player.pos.y };
+      for (let i = 0; i < 40 && !slowSeen && run.player.alive; i++) {
+        if (run.awaitingInput) run.submitAction({ kind: "move", dir });
+        run.heal(run.player, run.player.stats.maxHp);
+        if (e.statuses.some((s) => s.kind === "slow")) slowSeen = true;
+      }
+    }
+  }
+  // 회향(염주): 필드 배선 확인.
+  const yeomju = getWeapon("yeomju");
+  const yeomjuOk = yeomju.soulOnHit === 2 && yeomju.critBonus === undefined;
+  const hwandoOk = getWeapon("hwando").critBonus === 0.15;
+  weaponOk = slowSeen && yeomjuOk && hwandoOk;
+  console.log(`weapons: seokjang-slow=${slowSeen} 염주회향=${yeomjuOk} 환도치명=${hwandoOk} ok=${weaponOk}`);
+} catch (err) {
+  weaponOk = false;
+  console.log(`weapons FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), weapons(무기2차효과), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");
