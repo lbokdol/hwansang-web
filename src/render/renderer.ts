@@ -15,6 +15,7 @@ import {
   weaponSprite,
 } from "./sprites";
 import { getWeapon } from "../content/weapons";
+import { getAffix } from "../content/affixes";
 
 export interface TextOpts {
   color?: string;
@@ -270,6 +271,23 @@ export class Renderer {
       } else {
         const flash = a.flashTurns > 0;
         this.drawCellGlyph(a.pos, a.glyph, flash ? "#fff" : a.color, flash ? "rgba(255,90,90,0.5)" : undefined);
+      }
+      // 흉물(凶物) 정예 표식: 머리 위 한자 마크 + 틴트 (언어 무관 엘리트 신호).
+      const affixes = (a as { affixes?: string[] }).affixes;
+      if (affixes && affixes.length > 0) {
+        const def = getAffix(affixes[0]);
+        if (def) {
+          const cx = px + tile / 2;
+          const cy = py + Math.floor(tile * 0.12);
+          this.ctx.font = `bold ${Math.floor(tile * 0.44)}px ${TILE_FONT}`;
+          this.ctx.textAlign = "center";
+          this.ctx.textBaseline = "middle";
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeStyle = "rgba(0,0,0,0.75)";
+          this.ctx.strokeText(def.mark, cx, cy);
+          this.ctx.fillStyle = def.tint;
+          this.ctx.fillText(def.mark, cx, cy);
+        }
       }
       if (a.isEnemy && a.hpFraction < 1) {
         this.bar(px + 2, py + tile - 4, tile - 4, 3, a.hpFraction, "#d6455f", "rgba(0,0,0,0.6)");

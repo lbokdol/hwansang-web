@@ -13,6 +13,9 @@ import { DIRS4, add, manhattan, type Pos } from "../src/core/grid";
 import { getTalisman } from "../src/content/talismans";
 import { Enemy } from "../src/entities/enemy";
 import { getBoss } from "../src/content/bosses";
+import { recordKill, bestiaryTier, bestiaryJeonggiBonus } from "../src/meta/bestiary";
+import { addSoulXp, soulLevel, applySoulMastery } from "../src/meta/soulMastery";
+import { AFFIXES } from "../src/content/affixes";
 import type { RunLoadout } from "../src/core/types";
 
 registerAllHellTiles();
@@ -604,12 +607,56 @@ let metaOk = true;
   );
 }
 
+console.log("=== 요괴도감·혼숙련·흉물 systems ===");
+let systemsOk = true;
+try {
+  // 요괴도감: 60처치 → ★3, 정기 보너스 = 등급(prev 기준).
+  const bm = defaultMeta();
+  for (let i = 0; i < 60; i++) recordKill(bm, "dosan_mangryeong");
+  const bestiaryOk = bestiaryTier(bm.enemyKills["dosan_mangryeong"]) === 3 && bestiaryJeonggiBonus(24) === 1 && bestiaryJeonggiBonus(0) === 0;
+  // 혼숙련: 클리어 런 xp → 레벨↑ → 로드아웃 maxHp 버프.
+  const sm = defaultMeta();
+  addSoulXp(sm, "warrior", {
+    hellIndex: 9, hellName: "육도지옥", floorIndex: 2, totalFloorsDescended: 30, bossesKilled: 10,
+    enemiesKilled: 40, cleared: true, damageTaken: 0, talismansUsed: 0, revivesUsed: 0, turns: 100, cycle: 0,
+  });
+  const lo = baseLoadout();
+  const hp0 = lo.maxHp;
+  applySoulMastery(lo, sm.soulXp["warrior"]);
+  const masteryOk = soulLevel(sm.soulXp["warrior"]) >= 1 && lo.maxHp > hp0;
+  // 흉물: 각 어픽스 부여 후 양방향 dealDamage(반사/상한/돌풍) 무크래시.
+  let affixOk = true;
+  for (const af of AFFIXES) {
+    const run = new Run(defaultMeta(), maxed, 21);
+    run.start();
+    const p = run.player.pos;
+    let cell: Pos | null = null;
+    for (const d of DIRS4) {
+      const c = { x: p.x + d.x, y: p.y + d.y };
+      if (!run.isWall(c) && !run.actorAt(c)) { cell = c; break; }
+    }
+    if (!cell) continue;
+    const e = run.spawnEnemy("dosan_mangryeong", cell);
+    if (!e) continue;
+    e.affixes.push(af.id);
+    af.onSpawn?.(e);
+    run.dealDamage(e, 20, { source: run.player, kind: "physical" }); // mirror/equalize hooks
+    if (e.alive) e.act(run); // enemy melee → gust hook
+    if (run.player.alive) run.dealDamage(run.player, 5, { source: e, kind: "physical" }); // gust push
+  }
+  systemsOk = bestiaryOk && masteryOk && affixOk;
+  console.log(`systems: bestiary★3=${bestiaryOk} soulMastery=${masteryOk} affix(no-crash)=${affixOk} ok=${systemsOk}`);
+} catch (err) {
+  systemsOk = false;
+  console.log(`systems FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

@@ -3,6 +3,7 @@ import { UPGRADES } from "./upgrades";
 import { getSoul } from "../content/souls";
 import { getTitle, titleRank } from "./titles";
 import { getCurse } from "../content/curses";
+import { applySoulMastery } from "./soulMastery";
 
 /** Baseline run parameters before any 환생록 강화 is applied. */
 export function baseLoadout(): RunLoadout {
@@ -37,8 +38,9 @@ export function buildLoadout(meta: MetaState): RunLoadout {
     const lvl = meta.upgrades[node.id] ?? 0;
     if (lvl > 0) node.apply(lvl, lo);
   }
-  // 시작 화신.
+  // 시작 화신 + 화신 숙련(선택한 화신 전용 영구 강화).
   getSoul(meta.selectedSoul).apply(lo);
+  applySoulMastery(lo, meta.soulXp[meta.selectedSoul] ?? 0);
   // 도장 보너스: 격파한 왕마다 영구 최대 HP +3 (소소 보너스, 반복보상 §3.3).
   lo.maxHp += 3 * meta.bossesDefeated.length;
   // 업경대: 착용 칭호 1개의 미량 패시브 (랭크는 개인최고 기록의 함수).
