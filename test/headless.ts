@@ -16,6 +16,7 @@ import { getBoss } from "../src/content/bosses";
 import { recordKill, bestiaryTier, bestiaryJeonggiBonus } from "../src/meta/bestiary";
 import { addSoulXp, soulLevel, applySoulMastery } from "../src/meta/soulMastery";
 import { AFFIXES } from "../src/content/affixes";
+import { JUDGMENTS, emptyConduct, evaluateVerdict, type Conduct } from "../src/content/judgment";
 import type { RunLoadout } from "../src/core/types";
 
 registerAllHellTiles();
@@ -651,12 +652,66 @@ try {
   console.log(`systems FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 업경대 심판(Judgment) + 六道 ===");
+let judgeOk = true;
+try {
+  const E = emptyConduct();
+  const cases: [Partial<Conduct>, string][] = [
+    [{}, "jeongsim"], // 무흠·무독 → 정심(보우)
+    [{ subdued: 3 }, "jinno"], // jin=6 → 진노
+    [{ altarsTaken: 2, pickups: 1 }, "tamyok"], // tam=7 → 탐욕
+    [{ escapes: 3 }, "uchi"], // chi=6 → 우치
+    [{ damageTaken: 5, pickups: 1 }, "pyeong"], // 임계 미달 + 무흠 아님 → 방면
+  ];
+  let selOk = true;
+  for (const [c, expect] of cases) {
+    const v = evaluateVerdict({ ...E, ...c });
+    if (v.id !== expect) {
+      selOk = false;
+      console.log(`  verdict ${JSON.stringify(c)} → ${v.id} (expected ${expect})`);
+    }
+  }
+  // apply() no-crash on a real run + boss (모든 5 판결).
+  let applyOk = true;
+  for (const v of JUDGMENTS) {
+    const run = new Run(defaultMeta(), maxed, 31);
+    run.start();
+    const p = run.player.pos;
+    let cell: Pos | null = null;
+    for (const d of DIRS4) {
+      const c = { x: p.x + d.x, y: p.y + d.y };
+      if (!run.isWall(c) && !run.actorAt(c)) { cell = c; break; }
+    }
+    if (!cell) continue;
+    const boss = Enemy.fromBoss(getBoss("jingwang"), cell, 1);
+    run.level.actors.push(boss);
+    try {
+      v.apply(run, boss);
+    } catch (e) {
+      applyOk = false;
+      console.log(`  apply ${v.id} crash: ${(e as Error).message}`);
+    }
+  }
+  // 六道 아귀도(貪): 회복 반감.
+  const run2 = new Run(defaultMeta(), maxed, 32);
+  run2.start();
+  run2.player.stats.hp = 1;
+  run2.activeMark = "agwi";
+  run2.heal(run2.player, 10);
+  const agwiOk = run2.player.stats.hp <= 6; // 10 회복 → 반감(≤5)
+  judgeOk = selOk && applyOk && agwiOk;
+  console.log(`judgment: verdicts=${selOk} apply(no-crash)=${applyOk} agwi-halved=${agwiOk} ok=${judgeOk}`);
+} catch (err) {
+  judgeOk = false;
+  console.log(`judgment FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");
