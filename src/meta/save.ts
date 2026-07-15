@@ -30,6 +30,10 @@ export function defaultMeta(): MetaState {
     deepestFloor: 0,
     runs: 0,
     cleared: false,
+    dailyBestByDate: {},
+    dailyStreak: 0,
+    dailyLastCompletedDate: "",
+    dailyRewardsClaimed: [],
   };
 }
 
@@ -53,6 +57,10 @@ function migrate(raw: Partial<MetaState>): MetaState {
     gongdeokTierClaimed: raw.gongdeokTierClaimed ?? base.gongdeokTierClaimed,
     activeCurses: raw.activeCurses ?? base.activeCurses,
     maxCycleCleared: raw.maxCycleCleared ?? base.maxCycleCleared,
+    dailyBestByDate: { ...base.dailyBestByDate, ...(raw.dailyBestByDate ?? {}) },
+    dailyStreak: raw.dailyStreak ?? base.dailyStreak,
+    dailyLastCompletedDate: raw.dailyLastCompletedDate ?? base.dailyLastCompletedDate,
+    dailyRewardsClaimed: raw.dailyRewardsClaimed ?? base.dailyRewardsClaimed,
     version: SAVE_VERSION,
   };
 }

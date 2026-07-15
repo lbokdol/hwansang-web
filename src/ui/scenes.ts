@@ -13,6 +13,9 @@ import { addSoulXp } from "../meta/soulMastery";
 import { CURSES, cycleOf, TRUE_END_CYCLE } from "../content/curses";
 import { VOWS, vowsKarmaBonus } from "../content/vows";
 import { getBlessing, type BlessingTag } from "../content/blessings";
+import { buildDailyLoadout, dailyToday, recordDaily, type DailySpec } from "../content/daily";
+import { getVow } from "../content/vows";
+import { getCurse } from "../content/curses";
 
 const BLESS_TAG_COLOR: Record<BlessingTag, string> = {
   cheong: "#7be0a0",
@@ -33,7 +36,25 @@ interface EndInfo {
   rankUps: { name: string; rank: number }[];
   cycle: number;
   trueEnding: boolean;
+  blessings: { name: string; level: number; tag: BlessingTag }[];
+  samadhi: BlessingTag[];
+  realms: { label: string; count: number }[];
+  daily?: { score: number; isPB: boolean; completed: boolean; streak: number; reward: number };
 }
+
+const REALM_NAME: Record<string, string> = {
+  in: "인도",
+  cheon: "천도",
+  jiok: "지옥도",
+  agwi: "아귀도",
+  chuksaeng: "축생도",
+};
+const SAMADHI_NAME: Record<BlessingTag, string> = {
+  cheong: "정심",
+  jin: "업화",
+  tam: "보장",
+  chi: "통찰",
+};
 import { getTalisman, allTalismanIds } from "../content/talismans";
 import { HELLS } from "../content/hells";
 import { SOULS, getSoul } from "../content/souls";
@@ -215,6 +236,10 @@ export class HubScene implements Scene {
       case "d":
         this.game.setScene(new CodexScene(this.game));
         break;
+      case "F":
+      case "f":
+        this.game.setScene(new DailyScene(this.game));
+        break;
       case "R":
       case "r":
         if (this.game.meta.cleared) {
@@ -237,6 +262,7 @@ export class HubScene implements Scene {
     const bar = [
       { label: "화신 C", key: "C" },
       { label: "도감 D", key: "D" },
+      { label: "고시 F", key: "F" },
     ];
     if (this.game.meta.cleared) bar.push({ label: "윤회 R", key: "R" });
     bar.push({ label: "출발 S", key: "S" });
@@ -590,6 +616,60 @@ export class CycleScene implements Scene {
 }
 
 // ============================================================================
+// 명부 고시(冥府告示) — 데일리
+// ============================================================================
+export class DailyScene implements Scene {
+  private spec = dailyToday();
+  constructor(private game: Game) {}
+
+  render(r: Renderer): void {
+    r.clear("#0a0610");
+    const meta = this.game.meta;
+    const s = this.spec;
+    r.text("명부 고시", 40, 52, { color: "#f4ead2", size: 26, bold: true });
+    r.text(`오늘의 시험 — ${s.dateKey}. 화신·서원·악연·지도가 고정된 1지옥 규격.`, 40, 78, { color: DIM, size: 13 });
+    const soul = getSoul(s.soulId);
+    const vow = getVow(s.vowId);
+    const curse = getCurse(s.curseId);
+    let y = 132;
+    r.text(`화신 ▸ ${soul.name}`, 40, y, { color: "#cbbfd6", size: 18, bold: true });
+    y += 32;
+    r.text(`서원 ▸ ${vow ? vow.name : s.vowId}`, 40, y, { color: "#7be0a0", size: 17, bold: true });
+    if (vow) r.text(vow.desc, 200, y, { color: INK, size: 13 });
+    y += 30;
+    r.text(`악연 ▸ ${curse ? curse.name : s.curseId}`, 40, y, { color: "#e0698a", size: 17, bold: true });
+    if (curse) r.text(curse.desc, 200, y, { color: INK, size: 13 });
+    y += 44;
+    const best = meta.dailyBestByDate[s.dateKey] ?? 0;
+    r.text(`오늘 최고 점수: ${best}`, 40, y, { color: "#9bd1ff", size: 16 });
+    y += 26;
+    r.text(`연속 완수: ${meta.dailyStreak}일`, 40, y, { color: GOLD, size: 16 });
+    r.text("완수 = 클리어 + 서원 유지. Enter 시작 · Esc 명부로", r.width / 2, r.contentBottom - 32, {
+      color: INK,
+      size: 14,
+      align: "center",
+    });
+  }
+
+  handleKey(e: KeyboardEvent): void {
+    if (e.key === "Enter" || e.key === " ") {
+      const loadout = buildDailyLoadout(this.game.meta, this.spec);
+      const run = new Run(this.game.meta, loadout, this.spec.seed);
+      this.game.setScene(new RunScene(this.game, run, this.spec));
+      return;
+    }
+    if (e.key === "Escape" || e.key === "f" || e.key === "F") this.game.setScene(new HubScene(this.game));
+  }
+
+  touchBar() {
+    return [
+      { label: "시작 Enter", key: "Enter" },
+      { label: "명부 Esc", key: "Escape" },
+    ];
+  }
+}
+
+// ============================================================================
 // Run — gameplay + input + targeting
 // ============================================================================
 type Targeting =
@@ -602,7 +682,7 @@ export class RunScene implements Scene {
   private ended = false;
   private blessingSel = 0;
 
-  constructor(private game: Game, private run: Run) {}
+  constructor(private game: Game, private run: Run, private dailySpec?: DailySpec) {}
 
   enter(): void {
     this.run.onEnd = (won) => this.finish(won);
@@ -875,12 +955,41 @@ export class RunScene implements Scene {
 
     const bonus = ach.bonusKarma + gong.tierKarma;
     if (bonus > 0) awardKarma(meta, bonus);
+
+    // 인연·삼매·六道 집계(결과화면 표시용).
+    const blessings = Object.entries(this.run.blessingLevels).map(([id, level]) => {
+      const b = getBlessing(id);
+      return { name: b?.name ?? id, level, tag: (b?.tag ?? "cheong") as BlessingTag };
+    });
+    const realms = Object.entries(this.run.markTally).map(([mark, count]) => ({
+      label: REALM_NAME[mark] ?? mark,
+      count,
+    }));
+
+    // 명부 고시: 데일리 결과 기록 + 보상.
+    let daily: EndInfo["daily"];
+    if (this.dailySpec) {
+      const dr = recordDaily(meta, this.dailySpec, outcome);
+      if (dr.rewardKarma > 0) awardKarma(meta, dr.rewardKarma);
+      daily = {
+        score: dr.score,
+        isPB: dr.isPB,
+        completed: dr.completed,
+        streak: dr.streak,
+        reward: dr.rewardKarma,
+      };
+    }
+
     const endInfo: EndInfo = {
       gd: gong.gd,
       isPB: gong.isPB,
       rankUps: rankUps.map((r) => ({ name: r.def.name, rank: r.rank })),
       cycle: outcome.cycle,
       trueEnding,
+      blessings,
+      samadhi: this.run.samadhiTags,
+      realms,
+      daily,
     };
     this.game.persist();
     this.game.setScene(
@@ -941,6 +1050,38 @@ function drawOutcome(
       y += 19;
     }
   }
+  // 인연 · 삼매 · 六道 전륜
+  if (end.blessings.length > 0) {
+    const names = end.blessings.map((b) => (b.level > 1 ? `${b.name}×${b.level}` : b.name)).join(" · ");
+    r.text(`인연: ${names}`, cx, y, { color: "#c5a6ff", size: 13, align: "center" });
+    y += 19;
+  }
+  if (end.samadhi.length > 0) {
+    r.text(`삼매 개안 ▸ ${end.samadhi.map((t) => SAMADHI_NAME[t]).join(" · ")}`, cx, y, {
+      color: "#e0a6ff",
+      size: 14,
+      align: "center",
+      bold: true,
+    });
+    y += 20;
+  }
+  if (end.realms.length > 0) {
+    r.text(`육도: ${end.realms.map((rm) => `${rm.label}×${rm.count}`).join(" · ")}`, cx, y, {
+      color: "#b08cff",
+      size: 13,
+      align: "center",
+    });
+    y += 19;
+  }
+  if (end.daily) {
+    const d = end.daily;
+    const line =
+      `명부 고시 — 점수 ${d.score}${d.isPB ? " ★신기록" : ""}` +
+      (d.completed ? ` · 완수(연속 ${d.streak})` : "") +
+      (d.reward > 0 ? ` · +${d.reward}업` : "");
+    r.text(line, cx, y, { color: d.completed ? "#9be36b" : "#9bd1ff", size: 14, align: "center", bold: true });
+    y += 22;
+  }
   r.text("Enter — 명부로 돌아간다", cx, Math.max(y + 18, cy + 130), { color: INK, size: 16, align: "center" });
 }
 
@@ -950,7 +1091,7 @@ export class DeathScene implements Scene {
     private earned: number,
     private outcome: RunOutcome,
     private newly: AchievementDef[] = [],
-    private end: EndInfo = { gd: 0, isPB: false, rankUps: [], cycle: 0, trueEnding: false },
+    private end: EndInfo = { gd: 0, isPB: false, rankUps: [], cycle: 0, trueEnding: false, blessings: [], samadhi: [], realms: [] },
   ) {}
   enter(): void {
     sfx.music("bgm_myeongbu");
@@ -978,7 +1119,7 @@ export class ClearScene implements Scene {
     private earned: number,
     private outcome: RunOutcome,
     private newly: AchievementDef[] = [],
-    private end: EndInfo = { gd: 0, isPB: false, rankUps: [], cycle: 0, trueEnding: false },
+    private end: EndInfo = { gd: 0, isPB: false, rankUps: [], cycle: 0, trueEnding: false, blessings: [], samadhi: [], realms: [] },
   ) {}
   enter(): void {
     sfx.music("bgm_clear");

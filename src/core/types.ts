@@ -288,6 +288,8 @@ export interface RunLoadout {
   unlockedTalismanPool: string[];
   /** 서원(誓願): 이번 런에 스스로 건 계율 ids (지킨 채 마치면 업 보너스). */
   activeVows: string[];
+  /** 명부 고시: 이 런이 치를 지옥 수 제한(미설정=전체 강하). */
+  hellLimit?: number;
 }
 
 export interface UpgradeNode {
@@ -354,6 +356,14 @@ export interface MetaState {
   deepestFloor: number;
   runs: number;
   cleared: boolean;
+  /** 명부 고시(데일리): 날짜(yyyy-MM-dd)별 최고 점수. */
+  dailyBestByDate: Record<string, number>;
+  /** 데일리 연속 완수 수. */
+  dailyStreak: number;
+  /** 마지막으로 완수한 데일리 날짜. */
+  dailyLastCompletedDate: string;
+  /** 보상을 수령한 데일리 날짜들. */
+  dailyRewardsClaimed: string[];
 }
 
 /** 시작 화신(영혼) — changes the starting playstyle (반복보상 §3.2). */
