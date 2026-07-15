@@ -25,6 +25,8 @@ export class Player extends Actor {
   reviveInvuln = 0;
   invulnTurns: number;
   bonusAttackChance: number;
+  /** 치명타 확률(통찰 삼매) — 평타가 2배로 들어간다. */
+  critChance = 0;
   weapon: WeaponDef;
   killsThisRun = 0;
 
