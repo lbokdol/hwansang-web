@@ -3,8 +3,25 @@ import { dosanEnemies } from "./dosan";
 import { hwatangEnemies } from "./hwatang";
 import { hanbingEnemies } from "./hanbing";
 import { doksaEnemies } from "./doksa";
+import { balseolEnemies } from "./balseol";
+import { yangdongEnemies } from "./yangdong";
+import { geohaeEnemies } from "./geohae";
+import { heukseungEnemies } from "./heukseung";
+import { pungdoEnemies } from "./pungdo";
+import { yukdoEnemies } from "./yukdo";
 
-const ALL: EnemyDef[] = [...dosanEnemies, ...hwatangEnemies, ...hanbingEnemies, ...doksaEnemies];
+const ALL: EnemyDef[] = [
+  ...dosanEnemies,
+  ...hwatangEnemies,
+  ...hanbingEnemies,
+  ...doksaEnemies,
+  ...balseolEnemies,
+  ...yangdongEnemies,
+  ...geohaeEnemies,
+  ...heukseungEnemies,
+  ...pungdoEnemies,
+  ...yukdoEnemies,
+];
 const MAP = new Map<string, EnemyDef>(ALL.map((e) => [e.id, e]));
 
 export function getEnemy(id: string): EnemyDef {

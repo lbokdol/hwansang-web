@@ -14,7 +14,7 @@ import { weaponDropPool } from "../content/weapons";
 export interface GenerateParams {
   hell: HellDef;
   depth: number;
-  /** 절대 강하 단계(0..11) — 랜덤 지옥 순서 대응: 난이도는 지옥이 아니라 깊이로 결정. */
+  /** 절대 강하 단계(0..29) — 랜덤 지옥 순서 대응: 난이도는 지옥이 아니라 깊이로 결정. */
   stage: number;
   rng: Rng;
   /** Talisman ids eligible to drop on the floor. */
@@ -30,19 +30,26 @@ export interface GeneratedFloor {
   start: Pos;
 }
 
-// Map size / enemy count, indexed by absolute descent stage 0..11 (4 hells × 3).
+// Map size / enemy count, indexed by absolute descent stage 0..29 (10 hells × 3).
 // 단계별 난이도: bigger maps + more enemies the deeper you go, regardless of hell.
-const MAP_W = [36, 38, 38, 40, 40, 42, 42, 44, 44, 46, 46, 48];
-const MAP_H = [28, 30, 30, 32, 32, 34, 34, 36, 36, 38, 38, 40];
-const ENEMY_COUNT = [5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9];
+// prettier-ignore
+const MAP_W = [36, 38, 38, 40, 40, 42, 42, 44, 44, 46, 46, 48, 48, 49, 49, 50, 50, 51, 51, 52, 52, 53, 53, 54, 54, 55, 55, 56, 56, 56];
+// prettier-ignore
+const MAP_H = [28, 30, 30, 32, 32, 34, 34, 36, 36, 38, 38, 40, 40, 41, 41, 42, 42, 43, 43, 44, 44, 45, 45, 46, 46, 47, 47, 48, 48, 48];
+// prettier-ignore
+const ENEMY_COUNT = [5, 5, 6, 6, 6, 7, 7, 7, 8, 8, 8, 9, 9, 10, 10, 10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 14, 14, 14, 14, 14];
 
 function clampStage(stage: number): number {
   return Math.max(0, Math.min(stage, MAP_W.length - 1));
 }
 
-/** 단계별 적·보스 스탯 배율 — 깊이로 난이도가 오른다 (지옥 종류 무관). */
+/**
+ * 단계별 적·보스 스탯 배율 — 깊이로 난이도가 오른다 (지옥 종류 무관).
+ * 얕은 옥(0..11): 0.9→1.56. 깊은 옥(12..29)은 완만히 이어져 ~2.01까지.
+ */
 export function stageScale(stage: number): number {
-  return 0.9 + 0.06 * clampStage(stage);
+  const s = clampStage(stage);
+  return s <= 11 ? 0.9 + 0.06 * s : 1.56 + 0.025 * (s - 11);
 }
 
 export function generateFloor(p: GenerateParams): GeneratedFloor {

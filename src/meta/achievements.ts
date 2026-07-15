@@ -22,7 +22,18 @@ export interface AchievementDef {
   check(c: AchievementContext): boolean;
 }
 
-const BOSS_IDS = ["jingwang", "chogang", "songje", "ogwan"];
+const BOSS_IDS = [
+  "jingwang",
+  "chogang",
+  "songje",
+  "ogwan",
+  "yeomra",
+  "byeonseong",
+  "taesan",
+  "pyeongdeung",
+  "dosi",
+  "jeonryun",
+];
 
 export const ACHIEVEMENTS: AchievementDef[] = [
   // --- 진행(進行) ---
@@ -38,16 +49,16 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: "pilgrimage",
     name: "지옥 순례",
     nameHanja: "地獄巡禮",
-    desc: "한 번의 환생에서 네 번째(마지막) 지옥에 도달한다.",
+    desc: "한 번의 환생에서 다섯 번째 지옥(깊은 옥)에 도달한다.",
     karma: 25,
-    check: (c) => c.outcome.hellIndex >= 3,
+    check: (c) => c.outcome.hellIndex >= 4,
   },
   {
     id: "ten_kings",
     name: "십대왕 알현",
     nameHanja: "十大王謁見",
-    desc: "십대왕 넷을 모두 격파한 기록을 남긴다.",
-    karma: 40,
+    desc: "십대왕 열을 모두 격파한 기록을 남긴다.",
+    karma: 60,
     check: (c) => BOSS_IDS.every((b) => c.meta.bossesDefeated.includes(b)),
   },
   {
@@ -104,7 +115,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
     id: "codex_kings",
     name: "명부록·십왕편",
     nameHanja: "十王編",
-    desc: "십대왕 넷을 모두 명부록에 기록한다.",
+    desc: "십대왕 열을 모두 명부록에 기록한다.",
     karma: 20,
     check: (c) => c.meta.codex.bosses.length >= BOSS_IDS.length,
   },
