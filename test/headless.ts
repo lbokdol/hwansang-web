@@ -789,12 +789,35 @@ try {
   console.log(`blessings FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 동적 해저드(onFloorTick) ===");
+let hazardOk = true;
+try {
+  for (const hid of ["balseol", "yangdong", "geohae", "heukseung", "pungdo", "yukdo"]) {
+    const hell = HELLS.find((h) => h.id === hid);
+    if (!hell || !hell.onFloorTick) {
+      hazardOk = false;
+      console.log(`  ${hid}: onFloorTick 없음`);
+      continue;
+    }
+    const run = new Run(defaultMeta(), maxed, 61);
+    run.start();
+    for (let t = 0; t < 20 && run.player.alive; t++) {
+      hell.onFloorTick(run); // 상태 초기화·셀 스캔·setTile·피해·밀림 경로 실행(무크래시 검증)
+      if (run.player.hpFraction < 0.5) run.heal(run.player, run.player.stats.maxHp);
+    }
+  }
+  console.log(`hazards: 6 deep-hell 동적 tick ×20 실행 ok=${hazardOk}`);
+} catch (err) {
+  hazardOk = false;
+  console.log(`hazards FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

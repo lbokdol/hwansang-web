@@ -2,6 +2,7 @@
 // 동적 바람길 변위(WindTick)는 정적 산포로 단순화 이식.
 
 import type { HellDef, TileDef } from "../../core/types";
+import { windTick } from "./dynamics";
 
 const SQUALL_TILE: TileDef = {
   id: "pungdo_squall",
@@ -45,4 +46,5 @@ export const pungdoHell: HellDef = {
     const n = Math.floor(floors.length * (0.03 + 0.012 * ctx.depth));
     for (let i = 0; i < n; i++) level.setTile(floors[i], SQUALL_TILE.id);
   },
+  onFloorTick: windTick, // 주기적으로 방위가 바뀌는 돌풍이 밀어낸다
 };
