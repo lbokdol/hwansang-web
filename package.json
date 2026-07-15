@@ -1,0 +1,21 @@
+{
+  "name": "hwansang-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "환생록(還生錄) — 턴제 그리드 로그라이크 던전 크롤러",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "rot-js": "^2.2.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,18 @@
+# ===== 환생록 (還生錄) — web client (Vite + TypeScript) =====
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+
+# Generated headless-test bundle (rebuilt from test/headless.ts)
+test/_headless.mjs
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.tmp
