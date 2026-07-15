@@ -28,6 +28,7 @@ export function baseLoadout(): RunLoadout {
     startWeapon: "yeomju",
     bonusAttackChance: 0,
     unlockedTalismanPool: [],
+    activeVows: [],
   };
 }
 

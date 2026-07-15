@@ -41,6 +41,7 @@ import {
   type Conduct,
   type VerdictDef,
 } from "../content/judgment";
+import { getVow } from "../content/vows";
 import type { RunOutcome } from "../meta/karma";
 
 const FOV_RADIUS = 8;
@@ -97,6 +98,9 @@ export class Run implements GameContext {
   /** 표현층이 렌더할 최근 판결(court당 1회). */
   lastVerdict: VerdictDef | null = null;
 
+  /** 서원(誓願): 아직 파계하지 않은 계율 ids. */
+  readonly vowsKept = new Set<string>();
+
   enemiesKilled = 0;
   bossesKilled = 0;
   // 공과록(업적) 판정용 런 통계.
@@ -119,6 +123,7 @@ export class Run implements GameContext {
   constructor(meta: MetaState, loadout: RunLoadout, seed?: number) {
     this.meta = meta;
     this.loadout = loadout;
+    for (const v of loadout.activeVows) this.vowsKept.add(v);
     this.rng.seed(seed ?? Math.floor(Math.random() * 2 ** 31));
 
     // 지옥 순서(2단 셔플): 얕은 옥 4(order≤4) 셔플 → 깊은 옥 5(order 5–9) 셔플 →
@@ -282,6 +287,14 @@ export class Run implements GameContext {
       applyStatusRaw(this.player, "empower", 8, 2, undefined, 1);
       this.heal(this.player, Math.ceil(this.player.stats.maxHp * 0.25));
     }
+  }
+
+  /** 서원 파계: 계율을 어긴 순간 1회 표시하고 보상을 소멸시킨다. */
+  private breakVow(id: string): void {
+    if (!this.vowsKept.has(id)) return;
+    this.vowsKept.delete(id);
+    const v = getVow(id);
+    if (v) this.messages.push(`서원 파계 — ${v.name}(${v.nameHanja})`, "#c05a6b");
   }
 
   /** Begin the run's turn cycle (call once after construction). */
@@ -477,6 +490,8 @@ export class Run implements GameContext {
     }
     sfx.pickup();
     this.conduct.altarsTaken++; // 貪: 제단을 취함
+    this.breakVow("no_altar"); // 무소유(無所有)
+    if (altar.kind === "heal") this.breakVow("no_heal"); // 고행(苦行)
     this.level.removeAltar(altar);
   }
 
@@ -546,8 +561,13 @@ export class Run implements GameContext {
       sfx.talisman(stack.id);
       this.talismansUsed++;
       this.conduct.talismansUsed++;
+      this.breakVow("no_talisman"); // 묵언(默言)
       // 癡: 축지·천리안 등 요행/술수에 매달림.
-      if (stack.id === "teleport_talisman" || stack.id === "farsight_talisman") this.conduct.escapes++;
+      if (stack.id === "teleport_talisman" || stack.id === "farsight_talisman") {
+        this.conduct.escapes++;
+        this.breakVow("no_escape"); // 정도(正道)
+      }
+      if (stack.id === "heal_talisman" || stack.id === "detox_talisman") this.breakVow("no_heal"); // 고행(苦行)
       this.player.consumeTalisman(index);
       return true;
     }
@@ -857,7 +877,10 @@ export class Run implements GameContext {
     enemy.alive = false;
     this.enemiesKilled++;
     this.conduct.kills++;
-    if (wasSubdued) this.conduct.subdued++;
+    if (wasSubdued) {
+      this.conduct.subdued++;
+      this.breakVow("no_kill_helpless"); // 불살생(不殺生)
+    }
     this.fx.floatText(enemy.pos, "✦", enemy.color);
     enemy.def.onDeath?.(enemy, this);
     this.scheduler.remove(enemy);
@@ -965,6 +988,7 @@ export class Run implements GameContext {
       revivesUsed: this.revivesUsed,
       turns: this.turn,
       cycle: this.cycle,
+      vowsKept: [...this.vowsKept],
     };
   }
 }

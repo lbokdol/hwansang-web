@@ -17,6 +17,7 @@ import { recordKill, bestiaryTier, bestiaryJeonggiBonus } from "../src/meta/best
 import { addSoulXp, soulLevel, applySoulMastery } from "../src/meta/soulMastery";
 import { AFFIXES } from "../src/content/affixes";
 import { JUDGMENTS, emptyConduct, evaluateVerdict, type Conduct } from "../src/content/judgment";
+import { vowsKarmaBonus } from "../src/content/vows";
 import type { RunLoadout } from "../src/core/types";
 
 registerAllHellTiles();
@@ -572,7 +573,7 @@ let achOk = true;
   };
   const godClear = {
     hellIndex: 9, hellName: "육도지옥", floorIndex: 2, totalFloorsDescended: 30, bossesKilled: 10,
-    enemiesKilled: 45, cleared: true, damageTaken: 30, talismansUsed: 0, revivesUsed: 0, turns: 120, cycle: 0,
+    enemiesKilled: 45, cleared: true, damageTaken: 30, talismansUsed: 0, revivesUsed: 0, turns: 120, cycle: 0, vowsKept: [],
   };
   const r1 = evaluateAchievements(m, godClear);
   const r2 = evaluateAchievements(m, godClear); // idempotent
@@ -588,7 +589,7 @@ let metaOk = true;
   const m = defaultMeta();
   const oc = {
     hellIndex: 3, hellName: "독사지옥", floorIndex: 2, totalFloorsDescended: 12, bossesKilled: 4,
-    enemiesKilled: 45, cleared: true, damageTaken: 30, talismansUsed: 0, revivesUsed: 0, turns: 120, cycle: 0,
+    enemiesKilled: 45, cleared: true, damageTaken: 30, talismansUsed: 0, revivesUsed: 0, turns: 120, cycle: 0, vowsKept: [],
   };
   const { rankUps } = updateRecords(m, oc);
   const g1 = recordGongdeok(m, oc, "wanderer");
@@ -619,7 +620,7 @@ try {
   const sm = defaultMeta();
   addSoulXp(sm, "warrior", {
     hellIndex: 9, hellName: "육도지옥", floorIndex: 2, totalFloorsDescended: 30, bossesKilled: 10,
-    enemiesKilled: 40, cleared: true, damageTaken: 0, talismansUsed: 0, revivesUsed: 0, turns: 100, cycle: 0,
+    enemiesKilled: 40, cleared: true, damageTaken: 0, talismansUsed: 0, revivesUsed: 0, turns: 100, cycle: 0, vowsKept: [],
   });
   const lo = baseLoadout();
   const hp0 = lo.maxHp;
@@ -706,12 +707,32 @@ try {
   console.log(`judgment FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 서원(Vows) ===");
+let vowOk = true;
+try {
+  const lo = baseLoadout();
+  lo.activeVows = ["no_talisman", "no_kill_helpless"];
+  const run = new Run(defaultMeta(), lo, 41);
+  run.start();
+  const before = run.vowsKept.size;
+  run.player.inventory = [{ id: "heal_talisman", count: 1 }];
+  if (run.awaitingInput) run.submitAction({ kind: "talisman", index: 0, target: {} }); // 부적 사용 → no_talisman 파계
+  const oc = run.getOutcome();
+  vowOk = before === 2 && !run.vowsKept.has("no_talisman") && vowsKarmaBonus(oc.vowsKept) >= 0;
+  console.log(
+    `vows: kept ${before}→${run.vowsKept.size} no_talisman-broken=${!run.vowsKept.has("no_talisman")} keptBonus=${vowsKarmaBonus(oc.vowsKept)} ok=${vowOk}`,
+  );
+} catch (err) {
+  vowOk = false;
+  console.log(`vows FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

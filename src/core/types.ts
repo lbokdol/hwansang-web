@@ -286,6 +286,8 @@ export interface RunLoadout {
   bonusAttackChance: number;
   /** Talisman ids unlocked into the drop pool by 새로운 인연 (tiered). */
   unlockedTalismanPool: string[];
+  /** 서원(誓願): 이번 런에 스스로 건 계율 ids (지킨 채 마치면 업 보너스). */
+  activeVows: string[];
 }
 
 export interface UpgradeNode {
