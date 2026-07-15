@@ -21,10 +21,10 @@ const BLESS_TAG_COLOR: Record<BlessingTag, string> = {
   chi: "#c5a6ff",
 };
 const BLESS_TAG_LABEL: Record<BlessingTag, string> = {
-  cheong: "淸 정심",
-  jin: "嗔 업화",
-  tam: "貪 보장",
-  chi: "癡 통찰",
+  cheong: "정심 계열",
+  jin: "업화 계열",
+  tam: "보장 계열",
+  chi: "통찰 계열",
 };
 
 interface EndInfo {
@@ -264,7 +264,7 @@ export class VowScene implements Scene {
   render(r: Renderer): void {
     r.clear("#0a0610");
     const narrow = r.narrow;
-    r.text("서원(誓願)", 40, 52, { color: "#f4ead2", size: 26, bold: true });
+    r.text("서원", 40, 52, { color: "#f4ead2", size: 26, bold: true });
     r.text("이번 생을 어떤 계율로 살 것인가. 지킨 채 마치면 업이 크게 쌓인다 — 벌은 없다.", 40, 78, {
       color: DIM,
       size: 13,
@@ -277,7 +277,7 @@ export class VowScene implements Scene {
       const on = this.selected.has(v.id);
       const y = listTop + i * (narrow ? 44 : 46);
       const seld = i === this.sel;
-      r.text(`${seld ? "▶ " : "  "}${on ? "◆" : "◇"} ${v.name}(${v.nameHanja})`, 40, y, {
+      r.text(`${seld ? "▶ " : "  "}${on ? "◆" : "◇"} ${v.name}`, 40, y, {
         color: on ? "#7be0a0" : seld ? "#cbbfd6" : "#6a6480",
         size: narrow ? 15 : 16,
         bold: seld,
@@ -700,8 +700,8 @@ export class RunScene implements Scene {
     const ids = this.run.pendingBlessings;
     if (ids.length === 0) return;
     r.rect(0, 0, r.width, r.height, "rgba(6,5,12,0.84)");
-    r.text("인연(因緣)을 맺다", r.width / 2, 84, { color: "#c5a6ff", size: 26, bold: true, align: "center" });
-    r.text("왕의 법을 하나 빌린다 — 같은 색 셋을 모으면 삼매(三昧)가 열린다.", r.width / 2, 114, {
+    r.text("인연을 맺다", r.width / 2, 84, { color: "#c5a6ff", size: 26, bold: true, align: "center" });
+    r.text("왕의 법을 하나 빌린다 — 같은 색 셋을 모으면 삼매가 열린다.", r.width / 2, 114, {
       color: DIM,
       size: 13,
       align: "center",
@@ -720,9 +720,8 @@ export class RunScene implements Scene {
       r.rect(x, y, cardW, h, seld ? "#241f30" : "#141120");
       r.strokeRect(x, y, cardW, h, seld ? "#c5a6ff" : "#3a3550", seld ? 2 : 1);
       r.text(`${i + 1}`, x + 12, y + 26, { color: DIM, size: 15 });
-      r.text(b.name, x + cardW / 2, y + 62, { color: tc, size: 22, bold: true, align: "center" });
-      r.text(b.nameHanja, x + cardW / 2, y + 88, { color: DIM, size: 14, align: "center" });
-      r.text(BLESS_TAG_LABEL[b.tag], x + cardW / 2, y + 114, { color: tc, size: 12, align: "center" });
+      r.text(b.name, x + cardW / 2, y + 66, { color: tc, size: 22, bold: true, align: "center" });
+      r.text(BLESS_TAG_LABEL[b.tag], x + cardW / 2, y + 98, { color: tc, size: 12, align: "center" });
       r.text(b.desc, x + cardW / 2, y + h - 22, { color: INK, size: 12, align: "center" });
       x += cardW + gap;
     });

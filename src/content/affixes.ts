@@ -20,7 +20,7 @@ export const AFFIXES: AffixDef[] = [
   // 업경(鏡): 플레이어 직격 일부를 되비춘다 — 거울왕 state.mirror 재사용(dealDamage 반사 훅).
   {
     id: "mirror",
-    mark: "鏡",
+    mark: "경",
     tint: "#c4b9e0",
     weight: 2,
     onSpawn: (e) => {
@@ -32,7 +32,7 @@ export const AFFIXES: AffixDef[] = [
   // 균형(均): 한 방에 받는 피해를 상한(evenCap>0 = 항상 격파가능) — 평등대왕 均衡場 재사용.
   {
     id: "equalize",
-    mark: "均",
+    mark: "균",
     tint: "#c23a3a",
     weight: 2,
     onSpawn: (e) => {
@@ -41,11 +41,11 @@ export const AFFIXES: AffixDef[] = [
     },
   },
   // 질풍(風): 근접 피격 시 플레이어를 1칸 밀친다 — dealDamage에서 affix 검사(도시대왕 변위 관용구).
-  { id: "gust", mark: "風", tint: "#cbb98a", weight: 2 },
+  { id: "gust", mark: "풍", tint: "#cbb98a", weight: 2 },
   // 흉포(凶暴): 기교 없는 완력 — 추가 HP·ATK(순수 스탯 정예).
   {
     id: "brutal",
-    mark: "凶",
+    mark: "흉",
     tint: "#e0783c",
     weight: 2,
     onSpawn: (e) => {

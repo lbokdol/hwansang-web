@@ -116,7 +116,7 @@ const boilSteam: BossPattern = {
 
 const forms: BossForm[] = [
   {
-    glyph: "熔",
+    glyph: "용",
     color: "#c98a3a",
     atkMod: 1,
     defMod: -2,
@@ -124,7 +124,7 @@ const forms: BossForm[] = [
     p2: [moltenBurst, moltenCleave, moltenLash, moltenBurst],
   },
   {
-    glyph: "凝",
+    glyph: "응",
     color: "#8fb0a4",
     atkMod: -1,
     defMod: 3,
@@ -132,7 +132,7 @@ const forms: BossForm[] = [
     p2: [congealHarden, congealSlam, congealMold],
   },
   {
-    glyph: "沸",
+    glyph: "비",
     color: "#d6663a",
     atkMod: 0,
     defMod: 0,

@@ -61,7 +61,7 @@ const dolpung: EnemyDef = {
   def: 2,
   jeonggi: 5,
   speed: 100,
-  role: "嗔넉백",
+  role: "진넉백",
   hell: "pungdo",
   act(self, ctx) {
     recoilKnockback(self, ctx, "#c2b58f");
@@ -79,7 +79,7 @@ const maebok: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "貪매복",
+  role: "탐매복",
   hell: "pungdo",
   act(self, ctx) {
     if (ambushStrike(self, ctx, "#a89e84")) return;
@@ -98,7 +98,7 @@ const pungsul: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "癡원거리",
+  role: "치원거리",
   hell: "pungdo",
   act(self, ctx) {
     const p = ctx.player;
@@ -122,7 +122,7 @@ const hoeori: EnemyDef = {
   def: 1,
   jeonggi: 5,
   speed: 100,
-  role: "嗔재배치",
+  role: "진재배치",
   hell: "pungdo",
   act(self, ctx) {
     const p = ctx.player;

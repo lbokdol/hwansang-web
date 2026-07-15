@@ -60,7 +60,7 @@ const agnyeong: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "貪매복",
+  role: "탐매복",
   hell: "yukdo",
   act(self, ctx) {
     if (ambushStrike(self, ctx, "#a89a6a")) return;
@@ -79,7 +79,7 @@ const chihon: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "癡원거리",
+  role: "치원거리",
   hell: "yukdo",
   act(self, ctx) {
     const p = ctx.player;
@@ -103,7 +103,7 @@ const jingwe: EnemyDef = {
   def: 2,
   jeonggi: 5,
   speed: 100,
-  role: "嗔넉백",
+  role: "진넉백",
   hell: "yukdo",
   act(self, ctx) {
     recoilKnockback(self, ctx, "#c0a860");
@@ -121,7 +121,7 @@ const yungwe: EnemyDef = {
   def: 1,
   jeonggi: 5,
   speed: 100,
-  role: "嗔회전",
+  role: "진회전",
   hell: "yukdo",
   act(self, ctx) {
     const p = ctx.player;

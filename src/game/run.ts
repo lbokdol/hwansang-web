@@ -52,11 +52,11 @@ export type RealmMark = "none" | "in" | "cheon" | "jiok" | "agwi" | "chuksaeng";
 
 const REALM_LABEL: Record<RealmMark, string> = {
   none: "",
-  in: "인도(人) — 호신",
-  cheon: "천도(天) — 큰 호신",
-  jiok: "지옥도(瞋) — 해저드가 짙다",
-  agwi: "아귀도(貪) — 회복 반감",
-  chuksaeng: "축생도(癡) — 시야가 흐리다",
+  in: "인도 — 호신",
+  cheon: "천도 — 큰 호신",
+  jiok: "지옥도 — 해저드가 짙다",
+  agwi: "아귀도 — 회복 반감",
+  chuksaeng: "축생도 — 시야가 흐리다",
 };
 
 export type PlayerAction =
@@ -247,7 +247,7 @@ export class Run implements GameContext {
       this.messages.push(`윤회의 결의: ${this.loadout.startInvulnTurns}턴간 무적`, "#ffd86b");
     }
     if (this.floorIndex === 0 && this.activeMark !== "none") {
-      this.messages.push(`六道 표식: ${REALM_LABEL[this.activeMark]}`, "#b08cff");
+      this.messages.push(`육도 표식: ${REALM_LABEL[this.activeMark]}`, "#b08cff");
     }
     // 보스층: 업경대 심판을 여기서 평가·적용 (헤드리스 포함 court당 1회).
     this.judgeCourt();
@@ -266,7 +266,7 @@ export class Run implements GameContext {
     this.lastVerdict = v;
     this.recordJudgment(c, v);
     v.apply(this, boss);
-    this.messages.push(`업경대 심판 — ${v.name}(${v.nameHanja}): ${v.flavor}`, v.isBoon ? "#ffe9a8" : "#ff8a5a");
+    this.messages.push(`업경대 심판 — ${v.name}: ${v.flavor}`, v.isBoon ? "#ffe9a8" : "#ff8a5a");
     this.fx.shake(6);
   }
 
@@ -305,7 +305,7 @@ export class Run implements GameContext {
     if (!this.vowsKept.has(id)) return;
     this.vowsKept.delete(id);
     const v = getVow(id);
-    if (v) this.messages.push(`서원 파계 — ${v.name}(${v.nameHanja})`, "#c05a6b");
+    if (v) this.messages.push(`서원 파계 — ${v.name}`, "#c05a6b");
   }
 
   // ---- 인연(因緣) + 삼매(三昧) ----------------------------------------------
@@ -343,7 +343,7 @@ export class Run implements GameContext {
     this.blessings.push(def);
     this.blessingLevels[def.id] = (this.blessingLevels[def.id] ?? 0) + 1;
     def.onPick?.(this);
-    this.messages.push(`인연을 맺다 — ${def.name}(${def.nameHanja})`, "#c5a6ff");
+    this.messages.push(`인연을 맺다 — ${def.name}`, "#c5a6ff");
     if (this.blessingTagCount(def.tag) >= 3 && !this.samadhi.has(def.tag)) {
       this.samadhi.add(def.tag);
       this.awakenSamadhi(def.tag);
@@ -357,12 +357,12 @@ export class Run implements GameContext {
         p.stats.maxHp += 8;
         p.stats.hp += 8;
         p.damageReduction += 1;
-        this.messages.push("삼매 개안 — 정심(淨心): 청정한 방벽.", "#7be0a0");
+        this.messages.push("삼매 개안 — 정심: 청정한 방벽.", "#7be0a0");
         break;
       case "jin": // 업화: 공세
         p.stats.atk += 2;
         p.bonusAttackChance += 0.2;
-        this.messages.push("삼매 개안 — 업화(業火): 불타는 연격.", "#ff8a5a");
+        this.messages.push("삼매 개안 — 업화: 불타는 연격.", "#ff8a5a");
         break;
       case "tam": {
         // 보장: 손패
@@ -371,12 +371,12 @@ export class Run implements GameContext {
           const id = this.rng.weighted(this.weightedDropEntries());
           if (!(id && p.addTalisman(id))) this.heal(p, 6);
         }
-        this.messages.push("삼매 개안 — 보장(寶藏): 손패가 넉넉하다.", "#ffd86b");
+        this.messages.push("삼매 개안 — 보장: 손패가 넉넉하다.", "#ffd86b");
         break;
       }
       case "chi": // 통찰: 회심
         p.critChance += 0.22;
-        this.messages.push("삼매 개안 — 통찰(通察): 치명의 눈.", "#c5a6ff");
+        this.messages.push("삼매 개안 — 통찰: 치명의 눈.", "#c5a6ff");
         break;
     }
     this.fx.shake(6);
@@ -557,7 +557,7 @@ export class Run implements GameContext {
     if (!drop) return;
     const w = getWeapon(drop.weaponId);
     this.player.weapon = w;
-    this.messages.push(`${w.name}(${w.nameHanja})을(를) 장착했다.`, w.color);
+    this.messages.push(`${w.name}을(를) 장착했다.`, w.color);
     sfx.pickup();
     this.level.removeWeaponDrop(drop);
   }
@@ -590,7 +590,7 @@ export class Run implements GameContext {
     if (!drop) return;
     if (this.player.addTalisman(drop.talismanId)) {
       const t = getTalisman(drop.talismanId);
-      this.messages.push(`${t.name}(${t.nameHanja})을(를) 주웠다.`, t.color);
+      this.messages.push(`${t.name}을(를) 주웠다.`, t.color);
       this.discover("talismans", drop.talismanId);
       sfx.pickup();
       this.conduct.pickups++; // 貪: 전리품을 그러쥠
