@@ -42,6 +42,7 @@ import {
   type VerdictDef,
 } from "../content/judgment";
 import { getVow } from "../content/vows";
+import { drawBlessings, getBlessing, type BlessingDef, type BlessingTag } from "../content/blessings";
 import type { RunOutcome } from "../meta/karma";
 
 const FOV_RADIUS = 8;
@@ -100,6 +101,15 @@ export class Run implements GameContext {
 
   /** 서원(誓願): 아직 파계하지 않은 계율 ids. */
   readonly vowsKept = new Set<string>();
+
+  // ---- 인연(因緣) + 삼매(三昧) ----------------------------------------------
+  /** 왕에게 빌린 지속 축복(누적, 같은 id 중복=중첩). */
+  private readonly blessings: BlessingDef[] = [];
+  /** 보유 축복별 중첩 수(HUD/삼매 표시용). */
+  readonly blessingLevels: Record<string, number> = {};
+  private readonly samadhi = new Set<BlessingTag>();
+  /** 왕 격파 직후 제시되는 후보 id(비면 선택 대기 없음). 표현층이 오버레이로 렌더·선택. */
+  readonly pendingBlessings: string[] = [];
 
   enemiesKilled = 0;
   bossesKilled = 0;
@@ -180,6 +190,7 @@ export class Run implements GameContext {
   // ---- floor lifecycle -----------------------------------------------------
 
   private buildFloor(first = false): void {
+    this.pendingBlessings.length = 0; // 안전망: 미선택 인연은 하강 시 소멸(UI는 선택 전 하강을 막음)
     const hell = this.hell;
     if (this.floorIndex === 0) {
       // 새 지옥: 왕이 저울질할 태도(Conduct)를 리셋 + 직전 깊은 court가 새긴 六道 표식을 적용(소비).
@@ -295,6 +306,80 @@ export class Run implements GameContext {
     this.vowsKept.delete(id);
     const v = getVow(id);
     if (v) this.messages.push(`서원 파계 — ${v.name}(${v.nameHanja})`, "#c05a6b");
+  }
+
+  // ---- 인연(因緣) + 삼매(三昧) ----------------------------------------------
+
+  /** 같은 三毒/淸 인연 수(3이면 삼매 완성). */
+  blessingTagCount(tag: BlessingTag): number {
+    return this.blessings.filter((b) => b.tag === tag).length;
+  }
+  hasSamadhi(tag: BlessingTag): boolean {
+    return this.samadhi.has(tag);
+  }
+
+  /** 왕 격파 시 1-of-N(8겁+ 4) 인연을 제시(피날레 왕 제외 — 쓸 다음 지옥이 없음). */
+  private offerBlessings(): void {
+    if (this.hellIndex >= HELLS.length - 1) return; // 전륜(피날레) 이후엔 무의미
+    this.pendingBlessings.length = 0;
+    this.pendingBlessings.push(...drawBlessings(this.rng, this.cycle >= 8 ? 4 : 3));
+  }
+
+  /** 표현층이 오버레이에서 호출: 후보 중 하나를 선택해 보유. */
+  chooseBlessing(index: number): void {
+    if (index < 0 || index >= this.pendingBlessings.length) return;
+    const def = getBlessing(this.pendingBlessings[index]);
+    this.pendingBlessings.length = 0;
+    if (def) this.grantBlessing(def);
+  }
+
+  /** QA only: grant a blessing by id (bypasses the draft). */
+  debugGrantBlessing(id: string): void {
+    const def = getBlessing(id);
+    if (def) this.grantBlessing(def);
+  }
+
+  private grantBlessing(def: BlessingDef): void {
+    this.blessings.push(def);
+    this.blessingLevels[def.id] = (this.blessingLevels[def.id] ?? 0) + 1;
+    def.onPick?.(this);
+    this.messages.push(`인연을 맺다 — ${def.name}(${def.nameHanja})`, "#c5a6ff");
+    if (this.blessingTagCount(def.tag) >= 3 && !this.samadhi.has(def.tag)) {
+      this.samadhi.add(def.tag);
+      this.awakenSamadhi(def.tag);
+    }
+  }
+
+  private awakenSamadhi(tag: BlessingTag): void {
+    const p = this.player;
+    switch (tag) {
+      case "cheong": // 정심: 청정 방어
+        p.stats.maxHp += 8;
+        p.stats.hp += 8;
+        p.damageReduction += 1;
+        this.messages.push("삼매 개안 — 정심(淨心): 청정한 방벽.", "#7be0a0");
+        break;
+      case "jin": // 업화: 공세
+        p.stats.atk += 2;
+        p.bonusAttackChance += 0.2;
+        this.messages.push("삼매 개안 — 업화(業火): 불타는 연격.", "#ff8a5a");
+        break;
+      case "tam": {
+        // 보장: 손패
+        p.inventorySize += 1;
+        for (let i = 0; i < 2; i++) {
+          const id = this.rng.weighted(this.weightedDropEntries());
+          if (!(id && p.addTalisman(id))) this.heal(p, 6);
+        }
+        this.messages.push("삼매 개안 — 보장(寶藏): 손패가 넉넉하다.", "#ffd86b");
+        break;
+      }
+      case "chi": // 통찰: 회심
+        p.critChance += 0.22;
+        this.messages.push("삼매 개안 — 통찰(通察): 치명의 눈.", "#c5a6ff");
+        break;
+    }
+    this.fx.shake(6);
   }
 
   /** Begin the run's turn cycle (call once after construction). */
@@ -422,7 +507,12 @@ export class Run implements GameContext {
   /** Weapon-aware bump attack (설계서 3.2 + 무기 §6). Returns whether a turn is consumed. */
   private playerAttack(target: Enemy, dest: Pos, dir: Pos): boolean {
     const w = this.player.weapon;
-    const dmg = Math.max(1, this.effAtk(this.player) + w.atkBonus - this.effDef(target));
+    let dmg = Math.max(1, this.effAtk(this.player) + w.atkBonus - this.effDef(target));
+    // 통찰(癡) 삼매: 치명타 — 평타 2배.
+    if (this.player.critChance > 0 && this.rng.chance(this.player.critChance)) {
+      dmg *= 2;
+      this.fx.floatText(target.pos, "치명!", "#ff5a5a");
+    }
     this.dealDamage(target, dmg, { source: this.player, kind: "physical" });
     // 무사혼 패시브: 가끔 추가타
     if (target.alive && this.player.bonusAttackChance > 0 && this.rng.chance(this.player.bonusAttackChance)) {
@@ -718,6 +808,15 @@ export class Run implements GameContext {
       }
     }
 
+    // 인연 OnHit: 플레이어 평타가 살아남은 적을 맞힘(상태부여/흡정). 상태 부여뿐이라 재귀 없음.
+    if (this.blessings.length > 0 && opts.source === this.player && target.isEnemy && target.stats.hp > 0) {
+      for (const b of this.blessings) b.onHit?.(this, target as Enemy, dmg);
+    }
+    // 인연 OnHurt: 플레이어가 피격에서 생존(반사/밀쳐냄). 반사는 source=가해자라 재트리거 없음.
+    if (this.blessings.length > 0 && target === this.player && target.stats.hp > 0) {
+      for (const b of this.blessings) b.onHurt?.(this, opts.source, dmg);
+    }
+
     if (target.stats.hp <= 0) {
       if (target === this.player) this.handlePlayerDeath();
       else this.killEnemy(target as Enemy, opts.source);
@@ -870,7 +969,7 @@ export class Run implements GameContext {
 
   // ---- internal kill/death handling ---------------------------------------
 
-  private killEnemy(enemy: Enemy, _source?: Actor): void {
+  private killEnemy(enemy: Enemy, source?: Actor): void {
     if (!enemy.alive) return;
     // 嗔: 무력한 자(빙결·봉박·수면)를 벤 잔혹 — 업경은 몸이 아니라 방식을 읽는다.
     const wasSubdued = enemy.statuses.some((s) => s.kind === "freeze" || s.kind === "bound" || s.kind === "sleep");
@@ -916,9 +1015,15 @@ export class Run implements GameContext {
       this.level.setTile(enemy.pos, T_STAIRS);
       this.level.stairs = { ...enemy.pos };
       this.onBossDefeated(enemy.def.id);
+      this.offerBlessings(); // 인연: 왕 격파 시 1-of-N 지속 축복 제시(피날레 제외)
     } else {
       sfx.enemyDie();
       this.messages.push(`${enemy.name} 처치 (정기 +${jeonggi})`, "#9aa");
+    }
+
+    // 인연 OnKill: 플레이어 처치에만 반응(흡혼·견인). victim은 이미 레벨에서 제거됨.
+    if (source === this.player && this.blessings.length > 0) {
+      for (const b of this.blessings) b.onKill?.(this, enemy);
     }
   }
 

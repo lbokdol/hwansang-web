@@ -727,12 +727,74 @@ try {
   console.log(`vows FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 인연(Blessings) + 삼매 ===");
+let blessOk = true;
+try {
+  // OnPick: wrath → ATK+2
+  const r1 = new Run(defaultMeta(), maxed, 51);
+  r1.start();
+  const atk0 = r1.player.stats.atk;
+  r1.debugGrantBlessing("wrath");
+  const pickOk = r1.player.stats.atk === atk0 + 2;
+  // OnHit: ember → 맞은 (생존) 적에 화상
+  const r2 = new Run(defaultMeta(), maxed, 52);
+  r2.start();
+  r2.debugGrantBlessing("ember");
+  let hitOk = true;
+  {
+    const p = r2.player.pos;
+    let cell: Pos | null = null;
+    for (const d of DIRS4) {
+      const c = { x: p.x + d.x, y: p.y + d.y };
+      if (!r2.isWall(c) && !r2.actorAt(c)) { cell = c; break; }
+    }
+    if (cell) {
+      const e = r2.spawnEnemy("dosan_okjol", cell); // 14hp → 3딜에 생존
+      if (e) {
+        r2.dealDamage(e, 3, { source: r2.player, kind: "physical" });
+        hitOk = e.statuses.some((s) => s.kind === "burn");
+      }
+    }
+  }
+  // 삼매: 嗔 인연 3개 → 업화 삼매(bonusAttackChance↑)
+  const r3 = new Run(defaultMeta(), maxed, 53);
+  r3.start();
+  const ba0 = r3.player.bonusAttackChance;
+  r3.debugGrantBlessing("wrath");
+  r3.debugGrantBlessing("ember");
+  r3.debugGrantBlessing("gale_ward");
+  const samadhiOk = r3.hasSamadhi("jin") && r3.player.bonusAttackChance > ba0;
+  // 드래프트: 왕 격파 → pendingBlessings 채워짐
+  const r4 = new Run(defaultMeta(), maxed, 54);
+  r4.start();
+  let draftOk = true;
+  {
+    const bp = r4.player.pos;
+    let bcell: Pos | null = null;
+    for (const d of DIRS4) {
+      const c = { x: bp.x + d.x, y: bp.y + d.y };
+      if (!r4.isWall(c) && !r4.actorAt(c)) { bcell = c; break; }
+    }
+    if (bcell) {
+      const boss = Enemy.fromBoss(getBoss("jingwang"), bcell, 1);
+      r4.level.actors.push(boss);
+      r4.dealDamage(boss, 9999, { source: r4.player, kind: "pure" }); // 격파 → offerBlessings
+      draftOk = r4.pendingBlessings.length >= 3;
+    }
+  }
+  blessOk = pickOk && hitOk && samadhiOk && draftOk;
+  console.log(`blessings: onPick=${pickOk} onHit=${hitOk} samadhi(jin)=${samadhiOk} draft=${draftOk} ok=${blessOk}`);
+} catch (err) {
+  blessOk = false;
+  console.log(`blessings FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

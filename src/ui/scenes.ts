@@ -12,6 +12,20 @@ import { recordGongdeok, GONGDEOK_TIERS } from "../meta/score";
 import { addSoulXp } from "../meta/soulMastery";
 import { CURSES, cycleOf, TRUE_END_CYCLE } from "../content/curses";
 import { VOWS, vowsKarmaBonus } from "../content/vows";
+import { getBlessing, type BlessingTag } from "../content/blessings";
+
+const BLESS_TAG_COLOR: Record<BlessingTag, string> = {
+  cheong: "#7be0a0",
+  jin: "#ff8a5a",
+  tam: "#ffd86b",
+  chi: "#c5a6ff",
+};
+const BLESS_TAG_LABEL: Record<BlessingTag, string> = {
+  cheong: "淸 정심",
+  jin: "嗔 업화",
+  tam: "貪 보장",
+  chi: "癡 통찰",
+};
 
 interface EndInfo {
   gd: number;
@@ -586,6 +600,7 @@ type Targeting =
 export class RunScene implements Scene {
   private targeting: Targeting | null = null;
   private ended = false;
+  private blessingSel = 0;
 
   constructor(private game: Game, private run: Run) {}
 
@@ -608,10 +623,16 @@ export class RunScene implements Scene {
     this.drawTargeting(r);
     drawHud(r, this.run, this.targeting ? this.targeting.index : -1);
     this.drawBanner(r);
+    this.drawBlessingDraft(r);
   }
 
   handleKey(e: KeyboardEvent): void {
     if (this.ended) return;
+    // 인연 드래프트 대기 중이면 선택만 받는다(하강·이동 차단).
+    if (this.run.pendingBlessings.length > 0) {
+      this.handleBlessingKey(e);
+      return;
+    }
     if (this.targeting) {
       this.handleTargetingKey(e);
       return;
@@ -641,8 +662,75 @@ export class RunScene implements Scene {
       { label: "대기", key: "." },
       { label: "하강 ▼", key: ">" },
     ];
+    if (this.run.pendingBlessings.length > 0) {
+      return this.run.pendingBlessings.map((id, i) => ({
+        label: getBlessing(id)?.name ?? `인연${i + 1}`,
+        key: `${i + 1}`,
+      }));
+    }
     for (let i = 0; i < this.run.player.inventorySize; i++) bar.push({ label: `부적${i + 1}`, key: `${i + 1}` });
     return bar;
+  }
+
+  // ---- 인연 드래프트 오버레이 -----------------------------------------------
+
+  private handleBlessingKey(e: KeyboardEvent): void {
+    const n = this.run.pendingBlessings.length;
+    if (e.key === "ArrowLeft" || e.key === "a") {
+      this.blessingSel = (this.blessingSel - 1 + n) % n;
+      sfx.uiClick();
+      return;
+    }
+    if (e.key === "ArrowRight" || e.key === "d") {
+      this.blessingSel = (this.blessingSel + 1) % n;
+      sfx.uiClick();
+      return;
+    }
+    let idx = -1;
+    if (/^[1-9]$/.test(e.key)) idx = parseInt(e.key, 10) - 1;
+    else if (e.key === "Enter" || e.key === " ") idx = this.blessingSel;
+    if (idx >= 0 && idx < n) {
+      this.run.chooseBlessing(idx);
+      this.blessingSel = 0;
+      sfx.upgradeBuy();
+    }
+  }
+
+  private drawBlessingDraft(r: Renderer): void {
+    const ids = this.run.pendingBlessings;
+    if (ids.length === 0) return;
+    r.rect(0, 0, r.width, r.height, "rgba(6,5,12,0.84)");
+    r.text("인연(因緣)을 맺다", r.width / 2, 84, { color: "#c5a6ff", size: 26, bold: true, align: "center" });
+    r.text("왕의 법을 하나 빌린다 — 같은 색 셋을 모으면 삼매(三昧)가 열린다.", r.width / 2, 114, {
+      color: DIM,
+      size: 13,
+      align: "center",
+    });
+    const cardW = Math.min(200, Math.floor((r.width - 40) / ids.length) - 20);
+    const gap = 20;
+    const totalW = ids.length * cardW + (ids.length - 1) * gap;
+    let x = Math.round((r.width - totalW) / 2);
+    const y = Math.round(r.height / 2 - 100);
+    const h = 176;
+    ids.forEach((id, i) => {
+      const b = getBlessing(id);
+      if (!b) return;
+      const seld = i === this.blessingSel;
+      const tc = BLESS_TAG_COLOR[b.tag];
+      r.rect(x, y, cardW, h, seld ? "#241f30" : "#141120");
+      r.strokeRect(x, y, cardW, h, seld ? "#c5a6ff" : "#3a3550", seld ? 2 : 1);
+      r.text(`${i + 1}`, x + 12, y + 26, { color: DIM, size: 15 });
+      r.text(b.name, x + cardW / 2, y + 62, { color: tc, size: 22, bold: true, align: "center" });
+      r.text(b.nameHanja, x + cardW / 2, y + 88, { color: DIM, size: 14, align: "center" });
+      r.text(BLESS_TAG_LABEL[b.tag], x + cardW / 2, y + 114, { color: tc, size: 12, align: "center" });
+      r.text(b.desc, x + cardW / 2, y + h - 22, { color: INK, size: 12, align: "center" });
+      x += cardW + gap;
+    });
+    r.text("←→ 선택 · Enter 맺기 · 숫자 즉시 선택", r.width / 2, y + h + 40, {
+      color: INK,
+      size: 14,
+      align: "center",
+    });
   }
 
   private selectTalisman(i: number): void {
