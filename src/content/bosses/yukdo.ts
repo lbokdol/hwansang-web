@@ -153,11 +153,11 @@ const wheelStorm: BossPattern = {
 
 // 5輻: 역대 왕 얼굴이 바퀴처럼 되돌아옴. mirror=①·equalize=④·relocate=⑤ 각기 다른 form → 동시 불가.
 const forms: BossForm[] = [
-  { glyph: "鏡", color: "#c4b9e0", atkMod: 0, defMod: 0, p1: [wheelMirror, wheelGaze, wheelEcho], p2: [wheelMirror, wheelGaze, wheelEcho] },
-  { glyph: "熔", color: "#c98a3a", atkMod: 2, defMod: -2, p1: [wheelMolten, wheelCleave, wheelCrush], p2: [wheelMolten, wheelCleave, wheelCrush] },
-  { glyph: "鋸", color: "#aeb6be", atkMod: 1, defMod: 0, p1: [wheelHook, wheelCrush, wheelSummon], p2: [wheelHook, wheelCrush, wheelSummon] },
-  { glyph: "繩", color: "#7fa39a", atkMod: 0, defMod: 1, p1: [wheelEqualize, wheelInk, wheelCrush], p2: [wheelEqualize, wheelInk, wheelCrush] },
-  { glyph: "風", color: "#c9b98a", atkMod: 0, defMod: 0, p1: [wheelGust, wheelStorm, wheelCrush], p2: [wheelRelocate, wheelGust, wheelStorm] },
+  { glyph: "경", color: "#c4b9e0", atkMod: 0, defMod: 0, p1: [wheelMirror, wheelGaze, wheelEcho], p2: [wheelMirror, wheelGaze, wheelEcho] },
+  { glyph: "용", color: "#c98a3a", atkMod: 2, defMod: -2, p1: [wheelMolten, wheelCleave, wheelCrush], p2: [wheelMolten, wheelCleave, wheelCrush] },
+  { glyph: "거", color: "#aeb6be", atkMod: 1, defMod: 0, p1: [wheelHook, wheelCrush, wheelSummon], p2: [wheelHook, wheelCrush, wheelSummon] },
+  { glyph: "승", color: "#7fa39a", atkMod: 0, defMod: 1, p1: [wheelEqualize, wheelInk, wheelCrush], p2: [wheelEqualize, wheelInk, wheelCrush] },
+  { glyph: "풍", color: "#c9b98a", atkMod: 0, defMod: 0, p1: [wheelGust, wheelStorm, wheelCrush], p2: [wheelRelocate, wheelGust, wheelStorm] },
 ];
 
 export const jeonryun: BossDef = {

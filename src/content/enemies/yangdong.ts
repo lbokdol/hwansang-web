@@ -63,7 +63,7 @@ const uitae: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "貪매복",
+  role: "탐매복",
   hell: "yangdong",
   act(self, ctx) {
     if (ambushStrike(self, ctx, "#e8a24a")) return;

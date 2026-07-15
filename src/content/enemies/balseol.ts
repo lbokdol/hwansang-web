@@ -26,7 +26,7 @@ const gyeollyeong: EnemyDef = {
   def: 1,
   jeonggi: 5,
   speed: 100,
-  role: "嗔결계",
+  role: "진결계",
   hell: "balseol",
   act(self, ctx) {
     if (!isIncapacitated(self) && !hasStatus(self, "shield")) ctx.applyStatus(self, "shield", 2, 4);
@@ -45,7 +45,7 @@ const jaemulgwi: EnemyDef = {
   def: 0,
   jeonggi: 5,
   speed: 200,
-  role: "貪미끼",
+  role: "탐미끼",
   hell: "balseol",
   act(self, ctx) {
     const cd = self.state.scatterCd ?? 0;
@@ -75,7 +75,7 @@ const geoulbunsin: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "癡거울",
+  role: "치거울",
   hell: "balseol",
   act(self, ctx) {
     if (isAdjacent(self.pos, ctx.player.pos)) {
@@ -100,7 +100,7 @@ const oechimkkun: EnemyDef = {
   def: 1,
   jeonggi: 6,
   speed: 100,
-  role: "嗔각성",
+  role: "진각성",
   hell: "balseol",
   act(self, ctx) {
     const cd = self.state.shoutCd ?? 0;
@@ -157,7 +157,7 @@ const eopgyeongPyeon: EnemyDef = {
   def: 2,
   jeonggi: 5,
   speed: 100,
-  role: "嗔반사",
+  role: "진반사",
   hell: "balseol",
   act(self, ctx) {
     if (self.flashTurns > 0 && isAdjacent(self.pos, ctx.player.pos)) {

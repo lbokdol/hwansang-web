@@ -61,7 +61,7 @@ const galgori: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "嗔견인",
+  role: "진견인",
   hell: "geohae",
   act(self, ctx) {
     const p = ctx.player;
@@ -86,7 +86,7 @@ const bandong: EnemyDef = {
   def: 2,
   jeonggi: 5,
   speed: 100,
-  role: "嗔넉백",
+  role: "진넉백",
   hell: "geohae",
   act(self, ctx) {
     recoilKnockback(self, ctx, "#b86a6a");
@@ -104,7 +104,7 @@ const mihok: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "貪매복",
+  role: "탐매복",
   hell: "geohae",
   act(self, ctx) {
     if (ambushStrike(self, ctx, "#a8a098")) return;

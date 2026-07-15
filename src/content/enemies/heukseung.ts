@@ -61,7 +61,7 @@ const gakja: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "癡원거리",
+  role: "치원거리",
   hell: "heukseung",
   act(self, ctx) {
     const p = ctx.player;
@@ -92,7 +92,7 @@ const pyeongjun: EnemyDef = {
   def: 2,
   jeonggi: 5,
   speed: 100,
-  role: "嗔넉백",
+  role: "진넉백",
   hell: "heukseung",
   act(self, ctx) {
     recoilKnockback(self, ctx, "#9aa39a");
@@ -110,7 +110,7 @@ const gyeonggwi: EnemyDef = {
   def: 0,
   jeonggi: 4,
   speed: 100,
-  role: "貪매복",
+  role: "탐매복",
   hell: "heukseung",
   act(self, ctx) {
     if (ambushStrike(self, ctx, "#a09a8a")) return;
@@ -129,7 +129,7 @@ const gyunhyeong: EnemyDef = {
   def: 1,
   jeonggi: 5,
   speed: 100,
-  role: "貪모방",
+  role: "탐모방",
   hell: "heukseung",
   act(self, ctx) {
     scaleMirrorChase(self, ctx);
