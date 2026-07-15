@@ -83,8 +83,13 @@ export class Run implements GameContext {
     this.loadout = loadout;
     this.rng.seed(seed ?? Math.floor(Math.random() * 2 ** 31));
 
-    // 랜덤 지옥 순서: 매 런 4지옥을 셔플 → 시작 지옥이 무작위.
-    this.hellOrder = this.rng.shuffle([...Array(HELLS.length).keys()]);
+    // 지옥 순서(2단 셔플): 얕은 옥 4(order≤4) 셔플 → 깊은 옥 5(order 5–9) 셔플 →
+    // 오도전륜(order 10)은 항상 최후 고정. 시작 지옥은 무작위, 피날레는 늘 전륜대왕.
+    const idxs = [...Array(HELLS.length).keys()];
+    const shallow = idxs.filter((i) => HELLS[i].order <= 4);
+    const deep = idxs.filter((i) => HELLS[i].order >= 5 && HELLS[i].order < 10);
+    const finale = idxs.filter((i) => HELLS[i].order >= 10);
+    this.hellOrder = [...this.rng.shuffle(shallow), ...this.rng.shuffle(deep), ...finale];
     // 윤회겁: 드래프트한 악연의 weight 합 = 이번 런의 겁.
     this.cycle = cycleOf(meta.activeCurses);
 
@@ -516,9 +521,38 @@ export class Run implements GameContext {
       return 0;
     }
 
+    // 均衡場(평등대왕): cap the player's single hit on the boss; excess vanishes.
+    if (target.isEnemy && opts.source === this.player) {
+      const eb = target as Enemy;
+      const cap = (eb.state.equalize ?? 0) > 0 ? (eb.state.evenCap ?? 0) : 0;
+      if (cap > 0) dmg = Math.min(dmg, cap);
+    }
+
     target.stats.hp -= dmg;
     if (target === this.player) this.damageTaken += dmg;
     target.flashTurns = 1;
+
+    // 거울왕 반사장(염라대왕): reflect part of the player's direct hit. The
+    // reflection's source is the boss, so it never recurses through this branch.
+    if (
+      target.isEnemy &&
+      opts.source === this.player &&
+      ((target as Enemy).state.mirror ?? 0) > 0 &&
+      (opts.kind === undefined ||
+        opts.kind === "physical" ||
+        opts.kind === "ice" ||
+        opts.kind === "fire" ||
+        opts.kind === "holy" ||
+        opts.kind === "lightning")
+    ) {
+      const mb = target as Enemy;
+      const reflected = Math.min(mb.state.mirrorCap ?? 0, Math.ceil((dmg * (mb.state.mirrorFrac ?? 0)) / 1000));
+      if (reflected > 0) {
+        this.fx.floatText(this.player.pos, "반사", "#c4b9e0");
+        this.dealDamage(this.player, reflected, { source: mb, kind: "pure" });
+      }
+    }
+
     if (!opts.noFx) {
       this.fx.floatText(target.pos, `-${dmg}`, target === this.player ? "#ff6a6a" : "#ffd0a0");
       if (target === this.player) {

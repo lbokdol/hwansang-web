@@ -69,7 +69,9 @@ export function playerSprite(): HTMLImageElement | null {
 }
 
 export function enemySprite(defId: string): HTMLImageElement | null {
-  return ready(ENEMY_SPRITE[defId]);
+  // Shallow hells map to bare sprite names via ENEMY_SPRITE; deep-hell enemies
+  // and the 5–10대왕 use their full id as the sprite key (hs_<id>).
+  return ready(ENEMY_SPRITE[defId] ?? `hs_${defId}`);
 }
 
 // Per-actor draw "presence" (≈ √area in tile units; see drawActorSprite).

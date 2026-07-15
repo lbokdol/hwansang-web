@@ -9,7 +9,7 @@ import { ACHIEVEMENTS, evaluateAchievements } from "../src/meta/achievements";
 import { updateRecords } from "../src/meta/titles";
 import { recordGongdeok } from "../src/meta/score";
 import { bestStepToward } from "../src/map/path";
-import { DIRS4, manhattan, type Pos } from "../src/core/grid";
+import { DIRS4, add, manhattan, type Pos } from "../src/core/grid";
 import { getTalisman } from "../src/content/talismans";
 import { Enemy } from "../src/entities/enemy";
 import { getBoss } from "../src/content/bosses";
@@ -46,6 +46,81 @@ function bossKillTest(bossId: string, loadout: RunLoadout, scale = 1): { dead: b
     hits++;
   }
   return { dead: !boss.alive, hits, hp: boss.stats.hp };
+}
+
+// Boss brain smoke test: drive each king's act() for many turns (telegraph →
+// resolve → form-shift → fields → pulls/relocate), forcing it to phase 2 and
+// death, catching any runtime error. Exercises the deep-court boss code paths
+// the greedy bot rarely reaches (30 floors deep).
+function bossActTest(bossId: string, loadout: RunLoadout): { ok: boolean; note: string } {
+  const run = new Run(defaultMeta(), loadout, 13);
+  run.start();
+  const p = run.player.pos;
+  let cell: Pos | null = null;
+  for (let r = 2; r <= 5 && !cell; r++) {
+    for (const d of DIRS4) {
+      const c = { x: p.x + d.x * r, y: p.y + d.y * r };
+      if (!run.isWall(c) && !run.actorAt(c)) {
+        cell = c;
+        break;
+      }
+    }
+  }
+  if (!cell) return { ok: true, note: "no free cell (skipped)" };
+  const boss = Enemy.fromBoss(getBoss(bossId), cell, 1);
+  run.level.actors.push(boss);
+  try {
+    let ph2 = false;
+    for (let t = 0; t < 48 && boss.alive && run.player.alive && !run.over; t++) {
+      boss.act(run); // telegraph/resolve/form-shift/mirror/equalize/hook/gust/relocate
+      if (run.over || !run.player.alive) break;
+      if (boss.phase >= 2) ph2 = true;
+      // Chip the boss to force onPhaseChange + the kill path.
+      if (boss.alive) run.dealDamage(boss, Math.ceil(boss.stats.maxHp * 0.1), { source: run.player, kind: "physical" });
+      if (run.player.hpFraction < 0.5) run.heal(run.player, run.player.stats.maxHp);
+    }
+    return { ok: true, note: `dead=${!boss.alive} ph2=${ph2}` };
+  } catch (err) {
+    return { ok: false, note: (err as Error).message + "\n" + (err as Error).stack };
+  }
+}
+
+// Enemy brain smoke test: place an enemy aligned+adjacent-ish (so both ranged
+// and melee/ambush/knockback branches fire), drive its act() a few turns, then
+// kill it (onDeath: splits, slows). Catches errors in the 36 deep-court AIs the
+// greedy bot never reaches.
+function enemyActTest(enemyId: string, loadout: RunLoadout): { ok: boolean; note: string } {
+  const run = new Run(defaultMeta(), loadout, 17);
+  run.start();
+  const p = run.player.pos;
+  let cell: Pos | null = null;
+  // Prefer an aligned cell a few tiles out (exercises ranged/pull/gale); fall
+  // back to any free neighbour.
+  for (const r of [3, 2, 1]) {
+    for (const d of DIRS4) {
+      const c = { x: p.x + d.x * r, y: p.y + d.y * r };
+      if (!run.isWall(c) && !run.actorAt(c)) {
+        cell = c;
+        break;
+      }
+    }
+    if (cell) break;
+  }
+  if (!cell) return { ok: true, note: "no free cell (skipped)" };
+  const e = run.spawnEnemy(enemyId, cell);
+  if (!e) return { ok: true, note: "spawn blocked (skipped)" };
+  e.awake = true;
+  try {
+    for (let t = 0; t < 10 && e.alive && run.player.alive; t++) {
+      e.flashTurns = 1; // pretend it was just struck (recoil/reflect branches)
+      e.act(run);
+      if (run.player.hpFraction < 0.5) run.heal(run.player, run.player.stats.maxHp);
+    }
+    if (e.alive) run.killActor(e); // exercise onDeath (bunyeol split, eoreumjogak slow, ...)
+    return { ok: true, note: "" };
+  } catch (err) {
+    return { ok: false, note: (err as Error).message + "\n" + (err as Error).stack };
+  }
 }
 
 interface SimResult {
@@ -411,6 +486,35 @@ for (const id of ["songje", "ogwan"]) {
   console.log(`deepBoss ${id} ×1.56: dead=${k.dead} hits=${k.hits} remainingHp=${k.hp}`);
 }
 
+console.log("=== enemy brain smoke (36 deep-court AIs act) ===");
+let enemyActOk = true;
+const deepEnemies = allEnemyIds().filter((id) =>
+  /^(balseol|yangdong|geohae|heukseung|pungdo|yukdo)_/.test(id),
+);
+{
+  let fails = 0;
+  for (const id of deepEnemies) {
+    const a = enemyActTest(id, maxed);
+    if (!a.ok) {
+      enemyActOk = false;
+      fails++;
+      console.log(`enemyAct ${id}: FAIL — ${a.note}`);
+    }
+  }
+  console.log(`enemyAct: ${deepEnemies.length} deep-court AIs exercised, ${fails} failed`);
+}
+
+console.log("=== boss brain smoke (all 십대왕 act) ===");
+let bossActOk = true;
+for (const id of [
+  "jingwang", "chogang", "songje", "ogwan", "yeomra",
+  "byeonseong", "taesan", "pyeongdeung", "dosi", "jeonryun",
+]) {
+  const a = bossActTest(id, maxed);
+  if (!a.ok) bossActOk = false;
+  console.log(`bossAct ${id}: ok=${a.ok} — ${a.note}`);
+}
+
 console.log("=== 윤회겁(cycle) ===");
 let cycleOk = true;
 {
@@ -451,15 +555,19 @@ console.log("=== 공과록(achievements) eval ===");
 let achOk = true;
 {
   const m = defaultMeta();
-  m.bossesDefeated = ["jingwang", "chogang", "songje", "ogwan"];
+  const allKings = [
+    "jingwang", "chogang", "songje", "ogwan", "yeomra",
+    "byeonseong", "taesan", "pyeongdeung", "dosi", "jeonryun",
+  ];
+  m.bossesDefeated = [...allKings];
   m.codex = {
     enemies: allEnemyIds(),
-    bosses: ["jingwang", "chogang", "songje", "ogwan"],
+    bosses: [...allKings],
     talismans: allTalismanIds(),
     hells: HELLS.map((h) => h.id),
   };
   const godClear = {
-    hellIndex: 3, hellName: "독사지옥", floorIndex: 2, totalFloorsDescended: 12, bossesKilled: 4,
+    hellIndex: 9, hellName: "육도지옥", floorIndex: 2, totalFloorsDescended: 30, bossesKilled: 10,
     enemiesKilled: 45, cleared: true, damageTaken: 30, talismansUsed: 0, revivesUsed: 0, turns: 120, cycle: 0,
   };
   const r1 = evaluateAchievements(m, godClear);
@@ -498,10 +606,10 @@ let metaOk = true;
 
 console.log("\n=== summary ===");
 console.log(
-  `errors=${errors}  bossesKillable=${allBossesKillable}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
+  `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");
