@@ -14,6 +14,8 @@ export class Enemy extends Actor {
   /** Boss phase (1 or 2). */
   phase = 1;
   jeonggi: number;
+  /** 흉물(凶物) 정예 어픽스 ids (승격 시 부여). 잡몹에만, 보통 0~1개. */
+  affixes: string[] = [];
   /** FOV-gated activation: enemies stay inert until first seen (레벨디자인 §4.2). */
   awake = false;
 

@@ -31,6 +31,7 @@ import { getWeapon } from "../content/weapons";
 import { cycleOf, cycleScale } from "../content/curses";
 import { MessageLog } from "../ui/log";
 import { sfx } from "../audio/sfx";
+import { bestiaryJeonggiBonus, bestiaryStars, recordKill } from "../meta/bestiary";
 import type { RunOutcome } from "../meta/karma";
 
 const FOV_RADIUS = 8;
@@ -567,6 +568,24 @@ export class Run implements GameContext {
       this.checkBossPhase(target as Enemy);
     }
 
+    // 질풍(風) 흉물: 근접 피격 시 플레이어를 1칸 밀친다 (밀림 자체는 무피해). knockback의
+    // 충돌 대미지는 source=player라 이 훅을 재트리거하지 않는다.
+    if (
+      target === this.player &&
+      target.stats.hp > 0 &&
+      opts.source?.isEnemy &&
+      (opts.source as Enemy).affixes.includes("gust")
+    ) {
+      const src = opts.source;
+      const dx = this.player.pos.x - src.pos.x;
+      const dy = this.player.pos.y - src.pos.y;
+      const dir = Math.abs(dx) >= Math.abs(dy) ? { x: Math.sign(dx), y: 0 } : { x: 0, y: Math.sign(dy) };
+      if (dir.x || dir.y) {
+        this.knockback(this.player, dir, 1);
+        this.fx.floatText(this.player.pos, "돌풍", "#cbb98a");
+      }
+    }
+
     if (target.stats.hp <= 0) {
       if (target === this.player) this.handlePlayerDeath();
       else this.killEnemy(target as Enemy, opts.source);
@@ -726,8 +745,19 @@ export class Run implements GameContext {
     this.scheduler.remove(enemy);
     this.level.removeActor(enemy);
 
+    // 요괴 도감 숙련: 잡몹은 처치수를 누적하고, 숙련도만큼 정기(精氣) 보너스를 얹는다.
+    let jeonggi = enemy.jeonggi;
+    if (!enemy.isBoss) {
+      const { prev, tierUp } = recordKill(this.meta, enemy.def.id);
+      jeonggi += bestiaryJeonggiBonus(prev);
+      if (tierUp) {
+        this.messages.push(`${enemy.name} 복속 — ${bestiaryStars(prev + 1)}`, "#b08cff");
+        this.fx.floatText(enemy.pos, "복속↑", "#b08cff", 1.0);
+      }
+    }
+
     // 정기(精氣) → 영급 (in-run leveling).
-    const levels = this.player.gainJeonggi(enemy.jeonggi);
+    const levels = this.player.gainJeonggi(jeonggi);
     if (levels > 0) this.onLevelUp(levels);
 
     if (enemy.isBoss) {
@@ -745,7 +775,7 @@ export class Run implements GameContext {
       this.onBossDefeated(enemy.def.id);
     } else {
       sfx.enemyDie();
-      this.messages.push(`${enemy.name} 처치 (정기 +${enemy.jeonggi})`, "#9aa");
+      this.messages.push(`${enemy.name} 처치 (정기 +${jeonggi})`, "#9aa");
     }
   }
 

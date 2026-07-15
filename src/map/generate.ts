@@ -8,6 +8,7 @@ import type { HellDef } from "../core/types";
 import { Enemy } from "../entities/enemy";
 import { getEnemy } from "../content/enemies";
 import { getBoss } from "../content/bosses";
+import { AFFIX_ENTRIES, getAffix } from "../content/affixes";
 import { dropEntries } from "../content/talismans";
 import { weaponDropPool } from "../content/weapons";
 
@@ -157,7 +158,31 @@ function spawnMonsters(level: Level, start: Pos, p: GenerateParams, af: number):
     const cell = cells.pop()!;
     const id = p.rng.weighted(p.hell.monsterTable as { value: string; weight: number }[]);
     if (!id) break;
-    level.actors.push(Enemy.fromDef(getEnemy(id), { ...cell }, scale));
+    const e = Enemy.fromDef(getEnemy(id), { ...cell }, scale);
+    maybePromote(e, af, p.cycleMul ?? 1, p.rng);
+    level.actors.push(e);
+  }
+}
+
+/**
+ * 흉물(凶物) 승격: 얕은 1~2지옥(stage<6)은 제외, 이후 깊이·겁(劫)에 비례해 확률↑.
+ * 승격 시 정예 스탯 버프 + 시그니처 어픽스 1개 + 정기(보상) 증가. (Port of MapGen.MaybePromote.)
+ */
+function maybePromote(e: Enemy, stage: number, cycleMul: number, rng: Rng): void {
+  if (stage < 6) return; // 온보딩 보호: 얕은 1~2지옥엔 정예 없음
+  const chance = Math.min(0.45, 0.05 + 0.012 * (stage - 6) + 0.5 * (cycleMul - 1));
+  if (!rng.chance(chance)) return;
+  // 정예 기본 버프(눈에 띄게 위협적) + 정기(업·공덕 보상) 상향.
+  e.stats.maxHp = Math.max(1, Math.round(e.stats.maxHp * 1.6));
+  e.stats.hp = e.stats.maxHp;
+  e.stats.atk += 2;
+  e.jeonggi *= 3;
+  // 시그니처 어픽스 1개(가중 추첨) — evenCap 등이 버프된 MaxHp 기준으로 seed되도록 이 뒤에.
+  const affixId = rng.weighted(AFFIX_ENTRIES as { value: string; weight: number }[]);
+  const affix = affixId ? getAffix(affixId) : undefined;
+  if (affix) {
+    e.affixes.push(affix.id);
+    affix.onSpawn?.(e);
   }
 }
 

@@ -9,6 +9,7 @@ import { awardKarma, buyUpgrade, canBuy, karmaForRun, nextCost, ownedLevel, type
 import { ACHIEVEMENTS, evaluateAchievements, type AchievementDef } from "../meta/achievements";
 import { updateRecords, TITLES, titleRank, getTitle } from "../meta/titles";
 import { recordGongdeok, GONGDEOK_TIERS } from "../meta/score";
+import { addSoulXp } from "../meta/soulMastery";
 import { CURSES, cycleOf, TRUE_END_CYCLE } from "../content/curses";
 
 interface EndInfo {
@@ -701,6 +702,8 @@ export class RunScene implements Scene {
     const ach = evaluateAchievements(meta, outcome);
     const { rankUps } = updateRecords(meta, outcome);
     const gong = recordGongdeok(meta, outcome, meta.selectedSoul);
+    addSoulXp(meta, meta.selectedSoul, outcome); // 화신 숙련 경험 누적
+
     const bonus = ach.bonusKarma + gong.tierKarma;
     if (bonus > 0) awardKarma(meta, bonus);
     const endInfo: EndInfo = {

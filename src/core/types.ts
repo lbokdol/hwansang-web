@@ -329,6 +329,10 @@ export interface MetaState {
   unlockedSouls: string[];
   /** 도감(명부록): first-encounter tracking. */
   codex: Codex;
+  /** 요괴 도감 숙련(熟練): enemy id -> lifetime kill count (별 등급 + 정기 보너스). */
+  enemyKills: Record<string, number>;
+  /** 화신 숙련(化身 熟練): soul id -> lifetime XP (영구 화신 강화). */
+  soulXp: Record<string, number>;
   /** 공과록(功過格): unlocked achievement ids. */
   achievementsUnlocked: string[];
   /** 업경대(業鏡臺): 영구 개인최고 기록(PB) — 칭호 랭크의 단일 소스. */
