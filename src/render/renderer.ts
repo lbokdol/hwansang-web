@@ -24,6 +24,8 @@ export interface TextOpts {
   baseline?: CanvasTextBaseline;
   bold?: boolean;
   font?: string;
+  /** Paint a dark outline first so text stays legible over busy artwork. */
+  shadow?: boolean;
 }
 
 export const HUD_HEIGHT = 142;
@@ -46,6 +48,8 @@ export class Renderer {
   camY = 0;
   originX = 0;
   originY = 0;
+  /** Current pointer position in CSS px (−1,−1 = off-canvas). Fed by Game for UI hover. */
+  mouse = { x: -1, y: -1 };
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -90,9 +94,15 @@ export class Renderer {
   text(s: string, x: number, y: number, o: TextOpts = {}): void {
     const size = o.size ?? 16;
     this.ctx.font = `${o.bold ? "bold " : ""}${size}px ${o.font ?? TILE_FONT}`;
-    this.ctx.fillStyle = o.color ?? "#f4ead2";
     this.ctx.textAlign = o.align ?? "left";
     this.ctx.textBaseline = o.baseline ?? "alphabetic";
+    if (o.shadow) {
+      this.ctx.lineWidth = Math.max(2, Math.min(6, Math.floor(size / 8)));
+      this.ctx.strokeStyle = "rgba(0,0,0,0.85)";
+      this.ctx.lineJoin = "round";
+      this.ctx.strokeText(s, x, y);
+    }
+    this.ctx.fillStyle = o.color ?? "#f4ead2";
     this.ctx.fillText(s, x, y);
   }
 
@@ -121,6 +131,88 @@ export class Renderer {
     const dw = img.naturalWidth * scale;
     const dh = img.naturalHeight * scale;
     this.ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  }
+
+  // --- UI chrome primitives (mirrors the Godot Drawer) ----------------------
+
+  /** Draw an image stretched into a rect, optional alpha. */
+  image(img: HTMLImageElement, x: number, y: number, w: number, h: number, alpha = 1): void {
+    if (alpha >= 1) {
+      this.ctx.drawImage(img, x, y, w, h);
+    } else {
+      const prev = this.ctx.globalAlpha;
+      this.ctx.globalAlpha = alpha;
+      this.ctx.drawImage(img, x, y, w, h);
+      this.ctx.globalAlpha = prev;
+    }
+  }
+
+  private imageRegion(
+    img: HTMLImageElement,
+    dx: number, dy: number, dw: number, dh: number,
+    sx: number, sy: number, sw: number, sh: number,
+  ): void {
+    if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return;
+    this.ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  }
+
+  /** 9-slice a border/panel texture into a rect (srcM = corner in source px, dstM = on-screen). */
+  panel9(
+    img: HTMLImageElement, x: number, y: number, w: number, h: number,
+    srcM: number, dstM: number, alpha = 1, drawCenter = false,
+  ): void {
+    const tw = img.naturalWidth;
+    const th = img.naturalHeight;
+    dstM = Math.min(dstM, Math.min(w, h) / 2);
+    const prev = this.ctx.globalAlpha;
+    if (alpha < 1) this.ctx.globalAlpha = alpha;
+    const R = this.imageRegion.bind(this, img) as (
+      dx: number, dy: number, dw: number, dh: number, sx: number, sy: number, sw: number, sh: number,
+    ) => void;
+    const sMidW = tw - 2 * srcM;
+    const sMidH = th - 2 * srcM;
+    const dMidW = w - 2 * dstM;
+    const dMidH = h - 2 * dstM;
+    R(x, y, dstM, dstM, 0, 0, srcM, srcM);
+    R(x + w - dstM, y, dstM, dstM, tw - srcM, 0, srcM, srcM);
+    R(x, y + h - dstM, dstM, dstM, 0, th - srcM, srcM, srcM);
+    R(x + w - dstM, y + h - dstM, dstM, dstM, tw - srcM, th - srcM, srcM, srcM);
+    R(x + dstM, y, dMidW, dstM, srcM, 0, sMidW, srcM);
+    R(x + dstM, y + h - dstM, dMidW, dstM, srcM, th - srcM, sMidW, srcM);
+    R(x, y + dstM, dstM, dMidH, 0, srcM, srcM, sMidH);
+    R(x + w - dstM, y + dstM, dstM, dMidH, tw - srcM, srcM, srcM, sMidH);
+    if (drawCenter) R(x + dstM, y + dstM, dMidW, dMidH, srcM, srcM, sMidW, sMidH);
+    if (alpha < 1) this.ctx.globalAlpha = prev;
+  }
+
+  /** Horizontal 3-slice: fixed left/right caps, stretched middle (thin bar frames). */
+  slice3H(img: HTMLImageElement, x: number, y: number, w: number, h: number, srcMx: number, dstMx: number): void {
+    const tw = img.naturalWidth;
+    const th = img.naturalHeight;
+    dstMx = Math.min(dstMx, w / 2);
+    this.imageRegion(img, x, y, dstMx, h, 0, 0, srcMx, th);
+    this.imageRegion(img, x + dstMx, y, w - 2 * dstMx, h, srcMx, 0, tw - 2 * srcMx, th);
+    this.imageRegion(img, x + w - dstMx, y, dstMx, h, tw - srcMx, 0, srcMx, th);
+  }
+
+  /** Cover the whole screen with an image (aspect-preserving, center-cropped), optional alpha. */
+  cover(img: HTMLImageElement, alpha = 1): void {
+    const scale = Math.max(this.width / img.naturalWidth, this.height / img.naturalHeight);
+    const dw = img.naturalWidth * scale;
+    const dh = img.naturalHeight * scale;
+    this.image(img, (this.width - dw) / 2, (this.height - dh) / 2, dw, dh, alpha);
+  }
+
+  /** Radial darkening at the edges (procedural vignette, matches the Godot overlay). */
+  vignette(strength = 0.5): void {
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    const r = Math.hypot(cx, cy);
+    const g = this.ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, `rgba(4,3,7,${strength})`);
+    this.ctx.fillStyle = g;
+    this.ctx.fillRect(0, 0, this.width, this.height);
   }
 
   glyph(cx: number, cy: number, ch: string, fg: string, bg?: string, size = this.tile): void {

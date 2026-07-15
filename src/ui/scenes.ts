@@ -7,7 +7,7 @@ import { buildLoadout } from "../meta/loadout";
 import { UPGRADES } from "../meta/upgrades";
 import { awardKarma, buyUpgrade, canBuy, karmaForRun, nextCost, ownedLevel, type RunOutcome } from "../meta/karma";
 import { ACHIEVEMENTS, evaluateAchievements, type AchievementDef } from "../meta/achievements";
-import { updateRecords, TITLES, titleRank, getTitle } from "../meta/titles";
+import { updateRecords, TITLES, titleRank } from "../meta/titles";
 import { recordGongdeok, GONGDEOK_TIERS } from "../meta/score";
 import { addSoulXp } from "../meta/soulMastery";
 import { CURSES, cycleOf, TRUE_END_CYCLE } from "../content/curses";
@@ -16,6 +16,9 @@ import { getBlessing, type BlessingTag } from "../content/blessings";
 import { buildDailyLoadout, dailyToday, recordDaily, type DailySpec } from "../content/daily";
 import { getVow } from "../content/vows";
 import { getCurse } from "../content/curses";
+import * as ui from "./chrome";
+import { UiButtons, type BarItem } from "./buttons";
+import { soulLevel } from "../meta/soulMastery";
 
 const BLESS_TAG_COLOR: Record<BlessingTag, string> = {
   cheong: "#7be0a0",
@@ -63,7 +66,6 @@ import { getBoss } from "../content/bosses";
 import { hubBackground } from "../render/sprites";
 import { sfx } from "../audio/sfx";
 import type { Enemy } from "../entities/enemy";
-import type { MetaState } from "../core/types";
 
 const BG = "#0b0a10";
 const INK = "#cdbfa6";
@@ -111,103 +113,142 @@ export class TitleScene implements Scene {
 // ============================================================================
 export class HubScene implements Scene {
   private sel = 0;
+  private btn = new UiButtons();
   constructor(private game: Game) {}
 
   enter(): void {
     sfx.music("bgm_myeongbu");
   }
 
+  handleClick(x: number, y: number): void {
+    this.btn.click(x, y);
+  }
+
+  private buy(): void {
+    if (buyUpgrade(this.game.meta, UPGRADES[this.sel].id)) {
+      this.game.persist();
+      sfx.upgradeBuy();
+    }
+  }
+
   render(r: Renderer): void {
-    r.clear("#0a0912");
-    const bg = hubBackground();
-    if (bg) {
-      r.imageCover(bg, 0, 0, r.width, r.height);
-      r.rect(0, 0, r.width, r.height, "rgba(8,6,14,0.74)"); // darken for legibility
-    }
+    ui.backdrop(r, hubBackground(), "#0b0a10", 0.4);
+    this.btn.begin(r);
     const meta = this.game.meta;
-    r.text("명부", 40, 50, { color: "#f4ead2", size: 28, bold: true });
-    r.text(`업 ${meta.karma}`, r.width - 40, 50, { color: GOLD, size: 24, align: "right", bold: true });
+    const W = r.width;
+    const H = r.contentBottom;
+    const desktop = r.uiInsetBottom === 0; // mobile uses the DOM control bar for bottom actions
+
+    // title + karma (with coin seal) + soul (with wisp) + divider
+    r.text("명부", 48, 78, { color: ui.GOLD, size: 40, bold: true, shadow: true });
+    const kn = `${meta.karma}`;
+    r.text(kn, W - 48, 78, { color: "#ffd86b", size: 28, align: "right", bold: true, shadow: true });
+    if (ui.hasIcon("ico_karma")) ui.icon(r, "ico_karma", W - 48 - r.measure(kn, 28) - 22, 66, 30);
     const hubCycle = cycleOf(meta.activeCurses);
-    if (hubCycle > 0) r.text(`윤회 ${hubCycle}겁`, r.width - 40, 68, { color: "#e0698a", size: 14, align: "right", bold: true });
+    if (hubCycle > 0) r.text(`윤회 ${hubCycle}겁`, W - 48, 100, { color: "#e0698a", size: 15, align: "right", bold: true, shadow: true });
 
-    // 화신 + 도장 + 칭호 row(s) — stacks vertically on narrow screens.
-    const narrow = r.narrow;
     const soul = getSoul(meta.selectedSoul);
-    const unlocked = SOULS.filter((s) => s.isUnlocked(meta));
-    r.text(`화신: ${soul.name}`, 40, 78, { color: "#bda6ff", size: 15, bold: true });
-    r.text(`(C 변경 · ${unlocked.length}/${SOULS.length} 해금)`, 195, 78, { color: DIM, size: 12 });
-    const kings = [
-      { id: "jingwang", n: "진광" },
-      { id: "chogang", n: "초강" },
-      { id: "songje", n: "송제" },
-      { id: "ogwan", n: "오관" },
-    ];
-    const drawKings = (kx0: number, ky: number) => {
-      r.text("도장:", kx0 - 6, ky, { color: DIM, size: 13, align: "right" });
-      let kx = kx0 + 4;
-      for (const k of kings) {
-        const got = meta.bossesDefeated.includes(k.id);
-        r.text(`${got ? "●" : "○"}${k.n}`, kx, ky, { color: got ? GOLD : "#5a5468", size: 13 });
-        kx += 56;
-      }
-    };
-    const eqTitle = meta.equippedTitle ? getTitle(meta.equippedTitle) : undefined;
-    const titleText = eqTitle
-      ? `칭호 ▸ ${eqTitle.name} ${titleRank(eqTitle, meta.records)}품`
-      : "칭호 ▸ 없음 (업경대 D)";
-    let top: number;
-    if (narrow) {
-      drawKings(82, 100);
-      r.text(titleText, 40, 122, { color: eqTitle ? "#bda6ff" : "#6a6480", size: 12 });
-      r.text(soul.desc, 40, 142, { color: DIM, size: 11 });
-      top = 168;
-    } else {
-      drawKings(r.width - 312, 78);
-      r.text(soul.desc, 40, 98, { color: DIM, size: 12 });
-      r.text(titleText, r.width - 320, 98, { color: eqTitle ? "#bda6ff" : "#6a6480", size: 12 });
-      const locked = SOULS.filter((s) => !s.isUnlocked(meta));
-      if (locked.length > 0) {
-        r.text("잠긴 화신 ▸ " + locked.map((s) => `${s.name}: ${s.unlockHint}`).join("  ·  "), 40, 114, {
-          color: "#6a6480",
-          size: 11,
-        });
-      }
-      top = 134;
-    }
+    const soulLv = soulLevel(meta.soulXp[soul.id] ?? 0);
+    const soulIco = ui.hasIcon("ico_soul");
+    if (soulIco) ui.icon(r, "ico_soul", 60, 124, 26);
+    r.text(`화신: ${soul.name}  Lv.${soulLv}`, soulIco ? 82 : 48, 130, { color: ui.PARCHMENT, size: 20, shadow: true });
+    ui.divider(r, W / 2, 154, W - 96);
 
-    const lineH = narrow ? 30 : 27;
-    for (let i = 0; i < UPGRADES.length; i++) {
-      const node = UPGRADES[i];
-      const lvl = ownedLevel(meta, node.id);
-      const cost = nextCost(meta, node);
-      const y = top + i * lineH;
+    // left framed panel: upgrade list (the 명부 hall stays visible at right)
+    const barH = 40;
+    const barY = H - barH - 14;
+    const px = 36;
+    const py = 168;
+    const pw = W * 0.6;
+    const ph = (desktop ? barY - 16 : H - 16) - py;
+    ui.panel(r, px, py, pw, ph);
+
+    const ups = UPGRADES;
+    let rowH = (ph - 52) / ups.length;
+    rowH = Math.min(rowH, 30);
+    let y = py + 36;
+    for (let i = 0; i < ups.length; i++) {
+      const u = ups[i];
+      const lvl = ownedLevel(meta, u.id);
+      const cost = nextCost(meta, u);
       const selected = i === this.sel;
-      if (selected) r.rect(28, y - 15, r.width - 56, lineH - 3, "#191428");
-      const affordable = canBuy(meta, node);
-      const costText = cost === null ? "MAX" : narrow ? `${cost}업` : `${cost} 업`;
-      const costColor = cost === null ? "#5fae7a" : affordable ? GOLD : "#7a4a4a";
-      r.text(`${node.name}`, 44, y + 3, { color: selected ? GOLD : "#e3d8bf", size: 15, bold: selected });
-      if (narrow) {
-        r.text(`Lv ${lvl}/${node.maxLevel}`, r.width - 14, y + 3, { color: DIM, size: 12, align: "right" });
-        r.text(costText, r.width - 86, y + 3, { color: costColor, size: 13, align: "right" });
+      const rx = px + 14;
+      const ryy = y - rowH + 8;
+      const rw = pw - 28;
+      if (selected) r.rect(rx, ryy, rw, rowH, ui.alpha("#2c2540", 0.85));
+      else if (this.btn.isHover(rx, ryy, rw, rowH)) r.rect(rx, ryy, rw, rowH, ui.alpha("#2c2540", 0.45));
+      const idx = i;
+      this.btn.hit(rx, ryy, rw, rowH, () => {
+        this.sel = idx;
+        this.buy();
+      });
+      let textX = px + 30;
+      if (ui.hasIcon(`up_${u.id}`)) {
+        ui.icon(r, `up_${u.id}`, px + 32, y - 7, 22);
+        textX = px + 50;
+      }
+      const affordable = cost !== null && canBuy(meta, u);
+      const color = selected ? ui.GOLD_HI : affordable ? "#d8cbb0" : "#857c92";
+      r.text(`${selected ? "▸ " : "  "}${u.name}  Lv.${lvl}/${u.maxLevel}`, textX, y, { color, size: 18 });
+      if (cost !== null) {
+        const cn = `${cost}`;
+        r.text(cn, px + pw - 30, y, { color, size: 18, align: "right" });
+        if (ui.hasIcon("ico_karma")) ui.icon(r, "ico_karma", px + pw - 30 - r.measure(cn, 18) - 13, y - 7, 17);
       } else {
-        r.text(`Lv ${lvl}/${node.maxLevel}`, 220, y + 3, { color: DIM, size: 12 });
-        r.text(node.desc, 300, y + 3, { color: "#9a93a8", size: 12 });
-        r.text(costText, r.width - 44, y + 3, { color: costColor, size: 13, align: "right" });
+        r.text("MAX", px + pw - 30, y, { color, size: 18, align: "right" });
+      }
+      y += rowH;
+    }
+
+    // right region: selected 화신 portrait (click → 화신 변경) + selected-upgrade detail card
+    const region = W - (px + pw);
+    if (ui.hasIcon(`soul_${soul.id}`) && region > 130) {
+      const sxc = px + pw + region / 2;
+      const box = Math.min(240, region - 48);
+      const syc = py + 36 + box / 2;
+      ui.icon(r, `soul_${soul.id}`, sxc, syc, box);
+      r.text(soul.name, sxc, syc + box * 0.5 + 26, { color: ui.GOLD_HI, size: 24, align: "center", shadow: true });
+      this.btn.hit(sxc - box / 2, syc - box / 2, box, box + 40, () => this.cycleSoul());
+
+      const cardX = px + pw + 24;
+      const cardW = W - cardX - 36;
+      const cardY = py + 36 + box + 56;
+      const cardH = (desktop ? barY - 16 : H - 16) - cardY;
+      if (cardW > 140 && cardH > 84) {
+        ui.panel(r, cardX, cardY, cardW, cardH);
+        const tx = cardX + 24;
+        let ty = cardY + 34;
+        const su = ups[this.sel];
+        const slvl = ownedLevel(meta, su.id);
+        const maxed = slvl >= su.maxLevel;
+        r.text(su.name, tx, ty, { color: ui.GOLD_HI, size: 20, shadow: true });
+        r.text(maxed ? `Lv.${slvl}/${su.maxLevel} · MAX` : `Lv.${slvl}/${su.maxLevel}`, cardX + cardW - 28, ty, {
+          color: maxed ? "#7be0a0" : ui.PARCHMENT,
+          size: 15,
+          align: "right",
+        });
+        ty += 14;
+        ui.divider(r, cardX + cardW / 2, ty, cardW - 52);
+        ty += 22;
+        for (const ln of ui.wrap(r, su.desc, 17, cardW - 52)) {
+          r.text(ln, tx, ty, { color: ui.PARCHMENT, size: 17 });
+          ty += 24;
+        }
       }
     }
 
-    // 명부 NPC (저승사자) — run-count gated dialogue hook (반복보상 §5).
-    r.text(npcLine(meta), r.width / 2, r.contentBottom - 50, { color: "#9a93c0", size: 13, align: "center" });
-    const cycleHint = meta.cleared ? " · R 윤회" : "";
-    const footer = narrow
-      ? `↑↓ Enter강화 · C화신 · D도감${cycleHint} · S출발`
-      : `↑↓ 선택 · Enter 강화 · C 화신 · D 도감${cycleHint} · S 환생(출발) · Esc 타이틀`;
-    r.text(footer, r.width / 2, r.contentBottom - 26, {
-      color: INK,
-      size: 13,
-      align: "center",
-    });
+    // bottom action bar (desktop; on mobile the DOM control bar provides these)
+    if (desktop) {
+      const items: BarItem[] = [
+        { label: "화신", onClick: () => this.cycleSoul(), accent: ui.GOLD },
+        { label: "도감", onClick: () => this.game.setScene(new CodexScene(this.game)), accent: ui.GOLD },
+        { label: "고시", onClick: () => this.game.setScene(new DailyScene(this.game)), accent: "#7fe8c8" },
+      ];
+      if (meta.cleared) items.push({ label: "윤회", onClick: () => this.game.setScene(new CycleScene(this.game)), accent: "#b08cff" });
+      items.push({ label: "출발", onClick: () => this.game.setScene(new VowScene(this.game)), accent: "#ffd86b" });
+      items.push({ label: "타이틀", onClick: () => this.game.setScene(new TitleScene(this.game)), accent: ui.MUTED });
+      this.btn.bar(r, 36, barY, W - 72, barH, 10, items);
+    }
   }
 
   handleKey(e: KeyboardEvent): void {
@@ -365,14 +406,6 @@ export class VowScene implements Scene {
       { label: "취소", key: "Escape" },
     ];
   }
-}
-
-function npcLine(meta: MetaState): string {
-  if (meta.cleared) return "저승사자: 모든 왕을 넘어선 자여… 그대는 무엇을 위해 다시 돌아오는가?";
-  if (meta.bossesDefeated.includes("songje")) return "저승사자: 송제의 한기마저 견뎌냈는가. 환생의 문이 머지않았다.";
-  if (meta.bossesDefeated.includes("jingwang")) return "저승사자: 진광대왕을 넘었다니… 그대의 혼이 점점 또렷해지는군.";
-  if (meta.runs >= 1) return "저승사자: 죽음은 그대를 단련할 뿐. 업을 쌓아 다시 내려가라.";
-  return "저승사자: 또 왔는가, 망자여. 십대왕을 넘지 못하면 이 곳을 벗어날 수 없으리.";
 }
 
 // ============================================================================
