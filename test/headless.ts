@@ -18,6 +18,7 @@ import { addSoulXp, soulLevel, applySoulMastery } from "../src/meta/soulMastery"
 import { AFFIXES } from "../src/content/affixes";
 import { JUDGMENTS, emptyConduct, evaluateVerdict, type Conduct } from "../src/content/judgment";
 import { vowsKarmaBonus } from "../src/content/vows";
+import { dailyForKey, buildDailyLoadout, recordDaily } from "../src/content/daily";
 import type { RunLoadout } from "../src/core/types";
 
 registerAllHellTiles();
@@ -812,12 +813,39 @@ try {
   console.log(`hazards FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 명부 고시(Daily) ===");
+let dailyOk = true;
+try {
+  const s1 = dailyForKey("2026-07-15");
+  const s2 = dailyForKey("2026-07-15");
+  const detOk =
+    s1.seed === s2.seed && s1.soulId === s2.soulId && s1.vowId === s2.vowId && s1.curseId === s2.curseId;
+  const m = defaultMeta();
+  const lo = buildDailyLoadout(m, s1);
+  const loOk = lo.hellLimit === 1 && lo.activeVows.length === 1 && lo.activeVows[0] === s1.vowId;
+  // hellLimit=1 승리 → 첫 지옥으로 outcome 보고.
+  const run = new Run(m, lo, s1.seed);
+  run.start();
+  (run as unknown as { won: boolean }).won = true;
+  (run as unknown as { hellIndex: number }).hellIndex = 1;
+  const oc = run.getOutcome();
+  const limitOk = oc.hellIndex === 0;
+  // 정산: 완수(클리어+서원) → PB 기록 + 보상.
+  const rec = recordDaily(m, s1, { ...oc, cleared: true, vowsKept: [s1.vowId], totalFloorsDescended: 3, enemiesKilled: 12 });
+  const recOk = rec.score > 0 && rec.completed && rec.rewardKarma > 0 && m.dailyBestByDate[s1.dateKey] === rec.score;
+  dailyOk = detOk && loOk && limitOk && recOk;
+  console.log(`daily: deterministic=${detOk} loadout=${loOk} hellLimit=${limitOk} record=${recOk} ok=${dailyOk}`);
+} catch (err) {
+  dailyOk = false;
+  console.log(`daily FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

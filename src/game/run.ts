@@ -317,6 +317,10 @@ export class Run implements GameContext {
   hasSamadhi(tag: BlessingTag): boolean {
     return this.samadhi.has(tag);
   }
+  /** 개안한 삼매 색들(결과화면 표시용). */
+  get samadhiTags(): BlessingTag[] {
+    return [...this.samadhi];
+  }
 
   /** 왕 격파 시 1-of-N(8겁+ 4) 인연을 제시(피날레 왕 제외 — 쓸 다음 지옥이 없음). */
   private offerBlessings(): void {
@@ -632,8 +636,9 @@ export class Run implements GameContext {
     if (this.floorIndex >= this.hell.floors) {
       this.hellIndex++;
       this.floorIndex = 0;
-      if (this.hellIndex >= HELLS.length) {
-        this.win();
+      const limit = this.loadout.hellLimit;
+      if (this.hellIndex >= HELLS.length || (limit != null && this.hellIndex >= limit)) {
+        this.win(); // 명부 고시(1지옥) 또는 전 지옥 완주
         return;
       }
     }
@@ -1076,7 +1081,8 @@ export class Run implements GameContext {
 
   getOutcome(): RunOutcome {
     const won = this.won;
-    const idx = won ? HELLS.length - 1 : this.hellIndex;
+    const limit = this.loadout.hellLimit;
+    const idx = won ? (limit != null ? limit - 1 : HELLS.length - 1) : this.hellIndex;
     const finalHell = hellByIndex(this.hellOrder[idx] ?? idx);
     return {
       // On victory advanceFloor overshoots (hellIndex=HELLS.length); report the
