@@ -298,6 +298,14 @@ export interface RunLoadout {
   activeVows: string[];
   /** 명부 고시: 이 런이 치를 지옥 수 제한(미설정=전체 강하). */
   hellLimit?: number;
+  /** 무명(無明) 악연: 층 안내·길잡이 메시지 소멸. */
+  silentHell: boolean;
+  /** 담경(曇鏡) 악연: 정심(보우) 판결 봉인. */
+  suppressJeongsim: boolean;
+  /** 이중심(二重審) 악연: 두 번째 죄 판결도 함께 적용. */
+  doubleVerdict: boolean;
+  /** 업풍(業風) 악연: 흉물 승격 확률 가산. */
+  eliteChanceBonus: number;
 }
 
 export interface UpgradeNode {
@@ -372,6 +380,10 @@ export interface MetaState {
   dailyLastCompletedDate: string;
   /** 보상을 수령한 데일리 날짜들. */
   dailyRewardsClaimed: string[];
+  /** 설정: 효과음 음량(0..1). */
+  sfxVolume: number;
+  /** 설정: 배경음 음량(0..1). */
+  musicVolume: number;
 }
 
 /** 시작 화신(영혼) — changes the starting playstyle (반복보상 §3.2). */

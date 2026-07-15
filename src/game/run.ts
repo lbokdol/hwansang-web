@@ -37,7 +37,9 @@ import {
   chi,
   emptyConduct,
   evaluateVerdict,
+  evaluateVerdictExcept,
   jin,
+  secondVerdict,
   tam,
   type Conduct,
   type VerdictDef,
@@ -210,6 +212,7 @@ export class Run implements GameContext {
       weaponDrops: this.loadout.weaponDrops,
       cycleMul: cycleScale(this.cycle),
       markDensityMul: this.activeMark === "jiok" ? 1.5 : 1, // 지옥도(嗔) = 해저드 더 짙게
+      eliteChanceBonus: this.loadout.eliteChanceBonus, // 업풍(業風) = 흉물 창궐
     });
     this.level = level;
     this.player.pos = { ...start };
@@ -239,11 +242,14 @@ export class Run implements GameContext {
 
     computeFov(level, this.player.pos, this.fovRadius);
 
-    if (first || this.floorIndex === 0) this.messages.push(hell.intro, hell.palette.accent);
-    this.messages.push(
-      `${hell.name} ${this.floorIndex + 1}층` + (level.isBossFloor ? " — 왕의 자리" : ""),
-      "#cdbfa6",
-    );
+    // 무명(無明) 악연: 층 안내·길잡이 소멸.
+    if (!this.loadout.silentHell) {
+      if (first || this.floorIndex === 0) this.messages.push(hell.intro, hell.palette.accent);
+      this.messages.push(
+        `${hell.name} ${this.floorIndex + 1}층` + (level.isBossFloor ? " — 왕의 자리" : ""),
+        "#cdbfa6",
+      );
+    }
     if (this.loadout.startInvulnTurns > 0 && this.depthCount === 1) {
       this.messages.push(`윤회의 결의: ${this.loadout.startInvulnTurns}턴간 무적`, "#ffd86b");
     }
@@ -263,11 +269,21 @@ export class Run implements GameContext {
     const boss = this.level.livingEnemies().find((e) => e.isBoss);
     if (!boss) return;
     const c = this.conduct;
-    const v = evaluateVerdict(c);
+    let v = evaluateVerdict(c);
+    // 담경(曇鏡): 정심(보우)을 봉인 — 무흠이어도 보우 없이 다음 죄로.
+    if (this.loadout.suppressJeongsim && v.id === "jeongsim") v = evaluateVerdictExcept(c, "jeongsim");
     this.lastVerdict = v;
     this.recordJudgment(c, v);
     v.apply(this, boss);
     this.messages.push(`업경대 심판 — ${v.name}: ${v.flavor}`, v.isBoon ? "#ffe9a8" : "#ff8a5a");
+    // 이중심(二重審): 최상위 죄에 더해 두 번째 죄도 함께 묻는다.
+    if (this.loadout.doubleVerdict) {
+      const v2 = secondVerdict(c, v.id);
+      if (v2) {
+        v2.apply(this, boss);
+        this.messages.push(`이중심 — ${v2.name}: ${v2.flavor}`, "#ff8a5a");
+      }
+    }
     this.fx.shake(6);
   }
 

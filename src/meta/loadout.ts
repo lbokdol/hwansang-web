@@ -29,6 +29,10 @@ export function baseLoadout(): RunLoadout {
     bonusAttackChance: 0,
     unlockedTalismanPool: [],
     activeVows: [],
+    silentHell: false,
+    suppressJeongsim: false,
+    doubleVerdict: false,
+    eliteChanceBonus: 0,
   };
 }
 

@@ -26,6 +26,8 @@ export interface GenerateParams {
   cycleMul?: number;
   /** 六道 지옥도(嗔) 표식 = 해저드 밀도 배수(기본 1). */
   markDensityMul?: number;
+  /** 업풍(業風) 악연 — 흉물(정예) 승격 확률 가산(기본 0). */
+  eliteChanceBonus?: number;
 }
 
 export interface GeneratedFloor {
@@ -170,7 +172,7 @@ function spawnMonsters(level: Level, start: Pos, p: GenerateParams, af: number):
     const id = p.rng.weighted(p.hell.monsterTable as { value: string; weight: number }[]);
     if (!id) break;
     const e = Enemy.fromDef(getEnemy(id), { ...cell }, scale);
-    maybePromote(e, af, p.cycleMul ?? 1, p.rng);
+    maybePromote(e, af, p.cycleMul ?? 1, p.rng, p.eliteChanceBonus ?? 0);
     level.actors.push(e);
   }
 }
@@ -179,9 +181,9 @@ function spawnMonsters(level: Level, start: Pos, p: GenerateParams, af: number):
  * 흉물(凶物) 승격: 얕은 1~2지옥(stage<6)은 제외, 이후 깊이·겁(劫)에 비례해 확률↑.
  * 승격 시 정예 스탯 버프 + 시그니처 어픽스 1개 + 정기(보상) 증가. (Port of MapGen.MaybePromote.)
  */
-function maybePromote(e: Enemy, stage: number, cycleMul: number, rng: Rng): void {
+function maybePromote(e: Enemy, stage: number, cycleMul: number, rng: Rng, eliteChanceBonus: number): void {
   if (stage < 6) return; // 온보딩 보호: 얕은 1~2지옥엔 정예 없음
-  const chance = Math.min(0.45, 0.05 + 0.012 * (stage - 6) + 0.5 * (cycleMul - 1));
+  const chance = Math.min(0.6, 0.05 + 0.012 * (stage - 6) + 0.5 * (cycleMul - 1) + eliteChanceBonus);
   if (!rng.chance(chance)) return;
   // 정예 기본 버프(눈에 띄게 위협적) + 정기(업·공덕 보상) 상향.
   e.stats.maxHp = Math.max(1, Math.round(e.stats.maxHp * 1.6));
