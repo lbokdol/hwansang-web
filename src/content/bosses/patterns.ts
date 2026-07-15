@@ -102,13 +102,17 @@ export function summonAround(self: Enemy, ctx: GameContext, defId: string, count
 }
 
 /**
- * Turn telegraph cells into hazard tiles — but only every other cell, so a
- * boss leaves at most half its telegraph as lingering traps (the strike damage
- * still lands on every cell via strikePlayer). Matches Godot's balance pass.
+ * Turn telegraph cells into hazard tiles — but only every other cell (the strike
+ * damage still lands on every cell via strikePlayer). The conversion is temporary:
+ * each cell is registered as a temp tile that reverts to floor after one turn, so
+ * a boss's strikes never permanently litter the arena.
  */
 export function convertTiles(ctx: GameContext, cells: Pos[], tileId: string): void {
   for (let i = 0; i < cells.length; i++) {
-    if ((i & 1) === 0 && ctx.level.tileIdAt(cells[i]) === "floor") ctx.level.setTile(cells[i], tileId);
+    if ((i & 1) === 0 && ctx.level.tileIdAt(cells[i]) === "floor") {
+      ctx.level.setTile(cells[i], tileId);
+      ctx.level.tempTiles.push({ x: cells[i].x, y: cells[i].y, id: tileId, turnsLeft: 1 });
+    }
   }
 }
 

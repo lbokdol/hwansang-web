@@ -35,6 +35,8 @@ export class Level {
   drops: ItemDrop[] = [];
   weaponDrops: WeaponDrop[] = [];
   altars: Altar[] = [];
+  /** 공격으로 변환된 임시 함정 타일 — 남은 턴이 0이 되면 바닥으로 되돌아간다. */
+  tempTiles: { x: number; y: number; id: TileId; turnsLeft: number }[] = [];
 
   visible = new Set<string>();
   explored = new Set<string>();

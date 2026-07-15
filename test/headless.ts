@@ -19,6 +19,7 @@ import { AFFIXES } from "../src/content/affixes";
 import { JUDGMENTS, emptyConduct, evaluateVerdict, type Conduct } from "../src/content/judgment";
 import { vowsKarmaBonus } from "../src/content/vows";
 import { dailyForKey, buildDailyLoadout, recordDaily } from "../src/content/daily";
+import { convertTiles } from "../src/content/bosses/patterns";
 import type { RunLoadout } from "../src/core/types";
 
 registerAllHellTiles();
@@ -840,12 +841,41 @@ try {
   console.log(`daily FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 버그픽스: 보스 휴면 + 임시 함정 타일 ===");
+let fixOk = true;
+try {
+  // 보스는 시야 전까지 휴면(awake=false)으로 생성.
+  const bossDormant = Enemy.fromBoss(getBoss("jingwang"), { x: 5, y: 5 }, 1).awake === false;
+  // 공격 변환 타일은 1턴 뒤 바닥으로 복원.
+  let tempOk = false;
+  const run = new Run(defaultMeta(), maxed, 71);
+  run.start();
+  const p = run.player.pos;
+  let cell: Pos | null = null;
+  for (const d of DIRS4) {
+    const c = { x: p.x + d.x, y: p.y + d.y };
+    if (run.level.tileIdAt(c) === "floor" && !run.actorAt(c)) { cell = c; break; }
+  }
+  if (cell) {
+    convertTiles(run, [cell], "dosan_blade");
+    const set = run.level.tileIdAt(cell) === "dosan_blade";
+    if (run.awaitingInput) run.submitAction({ kind: "wait" });
+    const reverted = run.level.tileIdAt(cell) === "floor";
+    tempOk = set && reverted;
+  }
+  fixOk = bossDormant && tempOk;
+  console.log(`fixes: bossDormant=${bossDormant} tempTile(convert→revert)=${tempOk} ok=${fixOk}`);
+} catch (err) {
+  fixOk = false;
+  console.log(`fixes FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !achOk || !winOk || !metaOk || !cycleOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

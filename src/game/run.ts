@@ -23,7 +23,7 @@ import type { Actor } from "../entities/actor";
 import { Level } from "../map/level";
 import { computeFov } from "../map/fov";
 import { generateFloor, stageScale } from "../map/generate";
-import { T_STAIRS, getTile } from "../map/tiles";
+import { T_FLOOR, T_STAIRS, getTile } from "../map/tiles";
 import { HELLS, hellByIndex } from "../content/hells";
 import { getEnemy } from "../content/enemies";
 import { getTalisman, hasTalisman, baseDropPool, dropEntries } from "../content/talismans";
@@ -472,6 +472,7 @@ export class Run implements GameContext {
     this.turn++;
     if (this.over) return;
 
+    this.decayTempTiles(); // 공격으로 변한 함정 타일을 1턴 뒤 바닥으로 되돌린다
     this.hell.onFloorTick?.(this);
     this.loop();
     // Tick start-of-run invulnerability down AFTER this round's enemy phase, so
@@ -702,6 +703,24 @@ export class Run implements GameContext {
       if (actor === this.player) this.messages.push(`${name}에 베였다! (-${damage})`, "#ff8a5a");
     }
     if (status) this.applyStatus(actor, status.kind, status.turns, status.power);
+  }
+
+  /** 임시 함정 타일(공격 변환)을 감쇠 — 남은 턴이 0이면 바닥으로 복원. */
+  private decayTempTiles(): void {
+    const tt = this.level.tempTiles;
+    if (tt.length === 0) return;
+    const keep: typeof tt = [];
+    for (const t of tt) {
+      t.turnsLeft--;
+      if (t.turnsLeft > 0) {
+        keep.push(t);
+        continue;
+      }
+      const p = { x: t.x, y: t.y };
+      // 다른 것으로 덮이지 않았을 때만(여전히 그 함정 타일일 때) 바닥으로 되돌린다.
+      if (this.level.tileIdAt(p) === t.id) this.level.setTile(p, T_FLOOR);
+    }
+    this.level.tempTiles = keep;
   }
 
   // ---- GameContext implementation -----------------------------------------

@@ -56,7 +56,8 @@ export class Enemy extends Actor {
       onDeath: boss.onDeath,
     };
     const e = new Enemy(at, def, boss);
-    e.awake = true; // bosses are always active in their arena
+    // FOV-gated like any foe: the king stays dormant in its arena until the
+    // player sees it (or steps adjacent), so it never strikes from off-screen.
     if (scale !== 1) e.applyDifficultyScale(scale);
     return e;
   }
