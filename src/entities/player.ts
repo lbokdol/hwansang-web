@@ -86,7 +86,7 @@ export class Player extends Actor {
     if (stack.count <= 0) this.inventory.splice(index, 1);
   }
 
-  /** Award 정기; returns the number of levels gained (영급 상승: maxHP+6, ATK+1, +6 회복). */
+  /** Award 정기; returns the number of levels gained (영급 상승: maxHP+6, ATK+1, 전체 회복). */
   gainJeonggi(amount: number): number {
     this.jeonggi += amount;
     let gained = 0;
@@ -94,7 +94,11 @@ export class Player extends Actor {
       this.level++;
       this.stats.maxHp += 6;
       this.stats.atk += 1;
-      this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + 6);
+      // 영급 상승 = 전체 회복: 보스의 소환수가 위협이자 자원이 되도록(잡으면
+      // 정기→영급→회복). 회생부 외에 회복 수단이 없어 어트리션으로 붕괴하던
+      // 장기전을 설계 의도(근접 슬러그페스트)대로 성립시킨다. 런당 8영급
+      // 캡이 파밍 남용을 자연 억제한다.
+      this.stats.hp = this.stats.maxHp;
       gained++;
     }
     return gained;

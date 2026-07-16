@@ -1007,6 +1007,43 @@ try {
   console.log(`ccGrace FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 밸런스: 영급 전체 회복 + 접촉 피해 절반 ===");
+// A1: 영급 상승 = 전체 회복 (소환수가 위협이자 자원). A2: 보스 인접 접촉
+// 피해는 ATK 절반 (근접 교전 성립). 듀얼 실측으로 채택된 규칙 — 회귀 방지.
+let balanceOk = true;
+try {
+  // A1: 저체력에서 영급 상승 → HP 전량 회복.
+  const r1 = new Run(defaultMeta(), baseLoadout(), 99);
+  r1.start();
+  r1.player.stats.hp = 3;
+  r1.player.gainJeonggi(999); // 즉시 여러 영급 상승
+  const levelHealOk = r1.player.stats.hp === r1.player.stats.maxHp && r1.player.level > 1;
+  // A2: 휴면 보스 옆에서 1턴 대기 → 접촉 피해 = ceil(ATK/2) 정확히.
+  const r2 = new Run(defaultMeta(), baseLoadout(), 7);
+  r2.start();
+  let adjOk = false;
+  {
+    const p = r2.player.pos;
+    let cell: Pos | null = null;
+    for (const d of DIRS4) {
+      const c = { x: p.x + d.x, y: p.y + d.y };
+      if (!r2.isWall(c) && !r2.actorAt(c)) { cell = c; break; }
+    }
+    if (cell) {
+      const boss = Enemy.fromBoss(getBoss("jingwang"), cell, 1);
+      r2.level.actors.push(boss);
+      const hp0 = r2.player.stats.hp;
+      if (r2.awaitingInput) r2.submitAction({ kind: "wait" });
+      adjOk = hp0 - r2.player.stats.hp === Math.ceil(boss.stats.atk / 2);
+    }
+  }
+  balanceOk = levelHealOk && adjOk;
+  console.log(`balance: levelFullHeal=${levelHealOk} adjacencyHalf=${adjOk} ok=${balanceOk}`);
+} catch (err) {
+  balanceOk = false;
+  console.log(`balance FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("=== 설정(음량 지속) ===");
 let settingsOk = true;
 try {
@@ -1028,7 +1065,7 @@ console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !curseOk || !settingsOk || !achOk || !winOk || !metaOk || !cycleOk || !dotOk || !ccOk) {
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !curseOk || !settingsOk || !achOk || !winOk || !metaOk || !cycleOk || !dotOk || !ccOk || !balanceOk) {
   console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), weapons(무기2차효과), curses(규칙형악연), settings(음량), achievement, win-outcome, 업경대/공덕록, 윤회겁, dot-decay(상태이상 수명), or cc-grace(경직 유예) broken");
   process.exit(1);
 }
