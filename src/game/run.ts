@@ -658,7 +658,11 @@ export class Run implements GameContext {
     if (!this.player.alive) return;
     for (const e of this.level.livingEnemies()) {
       if (e.isBoss && manhattan(e.pos, this.player.pos) === 1) {
-        this.dealDamage(this.player, e.stats.atk, { source: e, kind: "physical" });
+        // 접촉 피해는 ATK의 절반: 왕은 근접 8~10회 교환이 필요한데 전량이면
+        // 패턴 피해와 이중 과세라 근접 교전 자체가 성립하지 않았다. 듀얼
+        // 실측에서 절반 적용 시 빈손 승률만 크게 오르고(2→9/32) 자원을
+        // 갖춘 플레이(19→21/32)는 거의 중립 — 숙련 난이도는 유지된다.
+        this.dealDamage(this.player, Math.ceil(e.stats.atk / 2), { source: e, kind: "physical" });
         return;
       }
     }
