@@ -54,6 +54,10 @@ export const hwatangHell: HellDef = {
   },
   // 번지는 불바다 — occasionally creep into adjacent plain floor (capped per tick).
   onFloorTick(ctx) {
+    // 보스층은 번짐 제외(다른 동적 지옥들과 동일): 초강대왕전의 불바다 누적은
+    // 보스 패턴(열탕 분출·2페이즈 외곽 링)이 담당하고, 장기전이 무한 용암으로
+    // 수렴해 아레나가 소멸하는 것을 막는다.
+    if (ctx.level.isBossFloor) return;
     if (!ctx.rng.chance(0.18)) return;
     const level = ctx.level;
     const lavaCells: Pos[] = [];
