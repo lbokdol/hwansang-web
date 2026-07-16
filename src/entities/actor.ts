@@ -29,6 +29,12 @@ export abstract class Actor {
   telegraph: TelegraphMark[] = [];
   /** True for the turn after this actor is hit (drives hit-flash FX). */
   flashTurns = 0;
+  /**
+   * 경직 유예: turns of immunity to freeze/bound/sleep after one ends (player
+   * only — see applyStatus). Freeze-on-hit patterns (송제 등) would otherwise
+   * chain: frozen → can't dodge the next telegraph → re-frozen, forever.
+   */
+  ccGraceTurns = 0;
 
   constructor(opts: ActorOptions) {
     this.id = NEXT_ID++;

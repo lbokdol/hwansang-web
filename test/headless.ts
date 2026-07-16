@@ -961,6 +961,52 @@ try {
   console.log(`curses FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
 }
 
+console.log("=== 상태이상 수명(DoT decay) 회귀 ===");
+// removeStatus가 조건 없이 배열을 재할당하던 시절, dealDamage(수면 해제)가
+// processTurnEnd의 stale-list 가드를 매 틱 발동시켜 화상/중독이 영구 지속됐다
+// (용암 한 번 = 사망 선고). 상태이상은 정의된 턴 수 안에 반드시 만료돼야 한다.
+let dotOk = true;
+try {
+  const run = new Run(defaultMeta(), maxed, 97);
+  run.start();
+  const { applyStatus } = await import("../src/core/status");
+  applyStatus(run.player, "burn", 3, 2);
+  applyStatus(run.player, "empower", 5, 3, undefined, 2);
+  let burnGone = -1;
+  for (let t = 0; t < 10; t++) {
+    if (run.awaitingInput) run.submitAction({ kind: "wait" });
+    run.heal(run.player, run.player.stats.maxHp);
+    if (burnGone < 0 && !run.player.statuses.some((s) => s.kind === "burn")) burnGone = t + 1;
+  }
+  const noNegative = run.player.statuses.every((s) => s.turns > 0);
+  dotOk = burnGone > 0 && burnGone <= 4 && noNegative;
+  console.log(`dotDecay: burn expired at turn ${burnGone} (≤4) negativeTurns=${!noNegative} ok=${dotOk}`);
+} catch (err) {
+  dotOk = false;
+  console.log(`dotDecay FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
+console.log("=== 경직 유예(연쇄 CC 방지) ===");
+// 송제대왕류 "적중 시 빙결" 패턴은 빙결 중 회피가 불가능해 재적중→재빙결
+// 사슬이 됐다. 속박이 풀린 직후 2턴은 재속박이 먹히지 않아야 한다.
+let ccOk = true;
+try {
+  const run = new Run(defaultMeta(), maxed, 98);
+  run.start();
+  const { applyStatus } = await import("../src/core/status");
+  applyStatus(run.player, "freeze", 1, 1);
+  // freeze 1턴 소화 → 만료 즉시 유예 발동. (해동 직후가 실전의 재적중 타이밍)
+  if (run.awaitingInput) run.submitAction({ kind: "wait" });
+  const thawed = !run.player.statuses.some((s) => s.kind === "freeze");
+  applyStatus(run.player, "freeze", 3, 1); // 유예 중 재빙결 시도
+  const resisted = !run.player.statuses.some((s) => s.kind === "freeze");
+  ccOk = thawed && resisted && run.player.ccGraceTurns > 0;
+  console.log(`ccGrace: thawed=${thawed} re-freeze-resisted=${resisted} grace=${run.player.ccGraceTurns} ok=${ccOk}`);
+} catch (err) {
+  ccOk = false;
+  console.log(`ccGrace FAIL: ${(err as Error).message}\n${(err as Error).stack}`);
+}
+
 console.log("=== 설정(음량 지속) ===");
 let settingsOk = true;
 try {
@@ -982,8 +1028,8 @@ console.log("\n=== summary ===");
 console.log(
   `errors=${errors}  bossesKillable=${allBossesKillable}  bossActOk=${bossActOk}  enemyActOk=${enemyActOk}  freezeSafe=${fz.ok}  (bot wins=${wins}/16, anyBoss=${anyBoss})`,
 );
-if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !curseOk || !settingsOk || !achOk || !winOk || !metaOk || !cycleOk) {
-  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), weapons(무기2차효과), curses(규칙형악연), settings(음량), achievement, win-outcome, 업경대/공덕록, or 윤회겁 broken");
+if (errors > 0 || !fz.ok || !allBossesKillable || !bossActOk || !enemyActOk || !systemsOk || !judgeOk || !vowOk || !blessOk || !hazardOk || !dailyOk || !fixOk || !weaponOk || !curseOk || !settingsOk || !achOk || !winOk || !metaOk || !cycleOk || !dotOk || !ccOk) {
+  console.error("FAILED: runtime errors, freeze-lock, unkillable boss, boss-brain, enemy-brain, systems(도감/숙련/흉물), judgment(업경대), vows(서원), blessings(인연), hazards(동적해저드), daily(명부고시), fixes(보스휴면/임시타일), weapons(무기2차효과), curses(규칙형악연), settings(음량), achievement, win-outcome, 업경대/공덕록, 윤회겁, dot-decay(상태이상 수명), or cc-grace(경직 유예) broken");
   process.exit(1);
 }
 console.log("OK: no runtime errors; all bosses killable with intended tools; no hangs");

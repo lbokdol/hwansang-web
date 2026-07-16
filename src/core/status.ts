@@ -26,6 +26,8 @@ export const STATUS_META: Record<StatusKind, StatusMeta> = {
   regen: { name: "위령", glyph: "위", color: "#7be0a0", bad: false },
 };
 
+const CC_KINDS: StatusKind[] = ["freeze", "bound", "sleep"];
+
 /** Stack/refresh a status on an actor. */
 export function applyStatus(
   actor: Actor,
@@ -35,6 +37,10 @@ export function applyStatus(
   source?: Actor,
   aux?: number,
 ): void {
+  // 경직 유예: the player shrugs off chain-CC for a couple turns after a
+  // freeze/bound/sleep ends — without this, freeze-on-hit patterns re-catch
+  // the immobilized player every rotation and the fight is unwinnable.
+  if (actor.isPlayer && CC_KINDS.includes(kind) && actor.ccGraceTurns > 0) return;
   const existing = actor.statuses.find((s) => s.kind === kind);
   if (!existing) {
     actor.statuses.push({ kind, turns, power, source, aux });
@@ -59,6 +65,11 @@ export function getStatus(actor: Actor, kind: StatusKind): StatusInstance | unde
 }
 
 export function removeStatus(actor: Actor, kind: StatusKind): void {
+  // Only reassign when the status is actually present: dealDamage calls this
+  // on every hit (sleep break), and an unconditional reassign would trip
+  // processTurnEnd's stale-list guard every DoT tick — freezing DoT durations
+  // (permanent burn/poison) and skipping the expiry filter entirely.
+  if (!actor.statuses.some((s) => s.kind === kind)) return;
   actor.statuses = actor.statuses.filter((s) => s.kind !== kind);
 }
 
@@ -124,5 +135,8 @@ export function processTurnEnd(actor: Actor, ctx: GameContext): void {
   // All statuses (incl. sleep) decay by duration; sleep also ends early when
   // damaged (handled in dealDamage). A non-decaying status could otherwise
   // stun-lock the player forever.
+  if (actor.ccGraceTurns > 0) actor.ccGraceTurns--;
+  const hadCc = actor.statuses.some((s) => CC_KINDS.includes(s.kind) && s.turns <= 0);
   actor.statuses = actor.statuses.filter((s) => s.turns > 0);
+  if (hadCc && actor.isPlayer) actor.ccGraceTurns = 2;
 }

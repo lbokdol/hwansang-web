@@ -424,11 +424,15 @@ export class Run implements GameContext {
         if (skipTurn) {
           this.consecutivePlayerSkips++;
           // Safety net: never lock the player out indefinitely (chained CC
-          // would otherwise spin this synchronous loop forever).
-          if (this.consecutivePlayerSkips >= 8) {
+          // would otherwise spin this synchronous loop forever). Capped at 3
+          // rounds — 빙결을 거는 패턴(송제 15딜+빙결 등)은 얼어 있는 동안
+          // 회피가 불가능해 재적중→재빙결 사슬이 되고, 8턴이면 그 사이의
+          // 피해만으로 확정 사망이라 안전망이 사실상 작동하지 않았다.
+          if (this.consecutivePlayerSkips >= 3) {
             removeStatus(this.player, "freeze");
             removeStatus(this.player, "bound");
             removeStatus(this.player, "sleep");
+            this.player.ccGraceTurns = 2; // 경직 유예 — 즉시 재속박 방지
             this.messages.push("의지를 끌어모아 속박을 떨쳐낸다!", "#ffd86b");
             this.consecutivePlayerSkips = 0;
             this.awaitingInput = true;
